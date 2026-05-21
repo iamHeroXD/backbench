@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
-import { Camera, LogOut, Shield, Bell, Eye, Trash2 } from "lucide-react";
+import { Camera, LogOut, Shield, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -99,7 +98,7 @@ export default function SettingsPage() {
           <div className="w-20 h-20 rounded-full bg-[#222] overflow-hidden flex items-center justify-center">
             {(avatarPreview ?? profile?.avatar_url) ? (
               <Image
-                src={avatarPreview ?? profile?.avatar_url!}
+                src={avatarPreview ?? profile?.avatar_url ?? ""}
                 alt=""
                 width={80}
                 height={80}

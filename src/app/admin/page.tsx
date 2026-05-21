@@ -4,12 +4,10 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Users, FileText, Flag, Radio, AlertTriangle, Key,
-  Shield, Eye, Trash2, Ban, CheckCircle, RefreshCw,
-  Lock, Unlock, ChevronRight, Sparkles
+  Shield, CheckCircle, Lock, Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/utils";
-import { generateInviteCode } from "@/lib/utils";
 
 type Stats = {
   totalUsers: number;
@@ -83,7 +81,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [inviteCount, setInviteCount] = useState(5);
-  const [newInvites, setNewInvites] = useState<string[]>([]);
+  const [newInvites] = useState<string[]>([]);
 
   useEffect(() => {
     loadTab(tab);

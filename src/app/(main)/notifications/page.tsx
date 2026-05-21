@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Bell, Heart, MessageSquare, UserPlus, Megaphone } from "lucide-react";
+import { Bell, MessageSquare, UserPlus, Megaphone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime, getAvatarFallback } from "@/lib/utils";
 import type { Notification } from "@/lib/types/database";

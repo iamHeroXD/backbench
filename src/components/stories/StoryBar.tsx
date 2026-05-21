@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarFallback } from "@/lib/utils";
 import StoryViewer from "./StoryViewer";
@@ -19,7 +20,6 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
   const supabase = createClient();
   const [groups, setGroups] = useState<StoryGroup[]>([]);
   const [viewing, setViewing] = useState<StoryGroup | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     fetchStories();
@@ -77,7 +77,7 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
         {/* Add story */}
         <div className="flex flex-col items-center gap-1 flex-shrink-0">
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => toast("Story creation coming soon.")}
             className="w-14 h-14 rounded-full bg-[#181818] border-2 border-dashed border-[#2a2a2a]
                        flex items-center justify-center text-[#555] hover:text-[#888] hover:border-[#444]
                        transition-colors"

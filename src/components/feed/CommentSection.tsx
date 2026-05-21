@@ -144,12 +144,11 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
 function CommentItem({
   comment,
   replies,
-  currentUserId,
   onReply,
 }: {
   comment: CommentWithAuthor;
   replies: CommentWithAuthor[];
-  currentUserId: string;
+  currentUserId?: string;
   onReply: (id: string, username: string) => void;
 }) {
   const author = comment.profiles;
