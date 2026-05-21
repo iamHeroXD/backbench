@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 94%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 94%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 94%;
+    --primary: 213 40% 48%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 80%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 213 40% 38%;
+    --accent-foreground: 0 0% 94%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 16%;
+    --input: 0 0% 12%;
+    --ring: 213 40% 48%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-[#0a0a0a] text-[#f0f0f0];
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-[#0a0a0a] text-[#f0f0f0] antialiased;
+    font-feature-settings: "cv11", "ss01";
+    overscroll-behavior: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-bb-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-bb-500;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-bb-accent-muted text-bb-50;
+  }
+
+  /* Input autofill dark mode */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #f0f0f0;
+    -webkit-box-shadow: 0 0 0px 1000px #1a1a1a inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+}
+
+@layer utilities {
+  .bb-card {
+    @apply bg-[#141414] border border-[#282828] rounded-xl;
+  }
+
+  .bb-surface {
+    @apply bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg;
+  }
+
+  .bb-input {
+    @apply bg-[#141414] border border-[#2a2a2a] text-[#f0f0f0]
+           placeholder:text-[#555] rounded-lg px-3 py-2
+           focus:outline-none focus:border-bb-accent focus:ring-1 focus:ring-bb-accent/30
+           transition-all duration-200;
+  }
+
+  .bb-button-primary {
+    @apply bg-bb-accent hover:bg-bb-accent-hover text-white
+           px-4 py-2 rounded-lg font-medium
+           transition-all duration-200 active:scale-[0.98];
+  }
+
+  .bb-button-ghost {
+    @apply bg-transparent hover:bg-[#1e1e1e] text-[#aaa] hover:text-[#f0f0f0]
+           px-3 py-2 rounded-lg
+           transition-all duration-200;
+  }
+
+  .story-ring {
+    background: conic-gradient(from 0deg, #4a7aa8, #6b9bc8, #4a7aa8);
+    padding: 2px;
+    border-radius: 9999px;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      #161616 25%,
+      #222222 50%,
+      #161616 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Safe area for mobile */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Framer Motion defaults */
+.motion-reduce * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Bottom nav safe area */
+.bottom-nav {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+/* Feed post entry animation */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.post-appear {
+  animation: fadeSlideIn 0.25s ease-out;
+}
