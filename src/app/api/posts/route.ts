@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const cursor = searchParams.get("cursor");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
+  const sort = searchParams.get("sort") ?? "for-you";
 
   let query = supabase
     .from("posts")
@@ -171,6 +172,21 @@ export async function GET(request: NextRequest) {
     .order("is_pinned", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
+
+  // For "latest" sort, skip pinned-first ordering and just show newest
+  if (sort === "latest") {
+    query = supabase
+      .from("posts")
+      .select(`
+        *,
+        profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
+        reactions (id, user_id, type),
+        polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
+      `)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  }
 
   if (cursor) {
     query = query.lt("created_at", cursor);

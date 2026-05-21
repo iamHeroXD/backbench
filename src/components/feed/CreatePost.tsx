@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image as ImageIcon, BarChart2, X, Plus } from "lucide-react";
+import { Image as ImageIcon, BarChart2, X, Plus, Loader } from "lucide-react";
 import { toast } from "sonner";
 import { validateImageFile } from "@/lib/moderation";
 import { createClient } from "@/lib/supabase/client";
@@ -23,9 +23,9 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isAnon, setIsAnon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // Poll fields
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [pollExpiry, setPollExpiry] = useState(24);
@@ -44,17 +44,42 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
   function clearImage() {
     setImageFile(null);
     setImagePreview(null);
-    setMode("text");
+    if (mode === "image") setMode("text");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setUploadProgress(0);
   }
 
   async function uploadImage(file: File): Promise<string | null> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const ext = file.name.split(".").pop();
+
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
     const path = `${user.id}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("posts").upload(path, file, { upsert: false });
-    if (error) return null;
+
+    // Determine content type explicitly
+    const contentTypeMap: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+    };
+    const contentType = contentTypeMap[ext] ?? file.type ?? "image/jpeg";
+
+    setUploadProgress(10);
+
+    const { error } = await supabase.storage.from("posts").upload(path, file, {
+      upsert: false,
+      contentType,
+    });
+
+    if (error) {
+      console.error("Upload error:", error);
+      setUploadProgress(0);
+      return null;
+    }
+
+    setUploadProgress(100);
     const { data } = supabase.storage.from("posts").getPublicUrl(path);
     return data.publicUrl;
   }
@@ -62,6 +87,7 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
   async function handleSubmit() {
     if (submitting) return;
     if (mode === "text" && !content.trim()) { toast.error("Write something first."); return; }
+    if (mode === "image" && !imageFile) { toast.error("Select an image first."); return; }
     if (mode === "poll") {
       if (!pollQuestion.trim()) { toast.error("Poll needs a question."); return; }
       if (pollOptions.filter((o) => o.trim()).length < 2) { toast.error("Need at least 2 options."); return; }
@@ -72,7 +98,11 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
       let imageUrl: string | null = null;
       if (mode === "image" && imageFile) {
         imageUrl = await uploadImage(imageFile);
-        if (!imageUrl) { toast.error("Image upload failed."); setSubmitting(false); return; }
+        if (!imageUrl) {
+          toast.error("Image upload failed. Check your connection and try again.");
+          setSubmitting(false);
+          return;
+        }
       }
 
       const res = await fetch("/api/posts", {
@@ -94,7 +124,6 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
       const data = await res.json();
       if (!res.ok) { toast.error(data.error ?? "Failed to post."); return; }
 
-      // Reset
       setContent("");
       clearImage();
       setPollQuestion("");
@@ -108,12 +137,12 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
       toast.error("Failed to post. Try again.");
     } finally {
       setSubmitting(false);
+      setUploadProgress(0);
     }
   }
 
   return (
     <div className="bb-card mx-3 mb-4 overflow-hidden">
-      {/* Collapsed trigger */}
       {!isExpanded ? (
         <button
           onClick={() => setIsExpanded(true)}
@@ -172,6 +201,14 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
                 >
                   <X size={13} />
                 </button>
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+                    <div
+                      className="h-full bg-[#4a7aa8] transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -237,7 +274,6 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
             {/* Bottom actions */}
             <div className="flex items-center justify-between pt-2 border-t border-[#1e1e1e]">
               <div className="flex items-center gap-1">
-                {/* Image upload */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -257,8 +293,6 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
                 >
                   <BarChart2 size={15} />
                 </button>
-
-                {/* Anonymous toggle */}
                 <button
                   onClick={() => setIsAnon(!isAnon)}
                   className={`px-2 py-1 text-xs rounded-lg transition-colors ${isAnon ? "bg-[#2a2a2a] text-[#888]" : "text-[#444] hover:text-[#666]"}`}
@@ -282,7 +316,7 @@ export default function CreatePost({ userAvatar, displayName, onPostCreated }: C
                 >
                   {submitting ? (
                     <span className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                      <Loader size={12} className="animate-spin" />
                       posting...
                     </span>
                   ) : "post"}

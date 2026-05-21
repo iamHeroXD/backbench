@@ -1,13 +1,12 @@
-﻿"use client";
-
+"use client";
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Users, FileText, Flag, Radio, AlertTriangle, Key,
-  Shield, CheckCircle, Lock, Unlock,
+  Shield, CheckCircle, Lock, Unlock, ScrollText, VolumeX, Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/utils";
@@ -62,6 +61,14 @@ type Invite = {
   profiles: { username: string } | null;
 };
 
+type ModLog = {
+  id: string;
+  action: string;
+  created_at: string;
+  details: Record<string, unknown> | null;
+  profiles: { username: string } | null;
+};
+
 type Tab = "overview" | "users" | "reports" | "whispers" | "invites" | "logs";
 
 async function adminAction(action: object) {
@@ -81,16 +88,13 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<Report[]>([]);
   const [whispers, setWhispers] = useState<Whisper[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [logs, setLogs] = useState<ModLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [inviteCount, setInviteCount] = useState(5);
-  const [newInvites] = useState<string[]>([]);
+  const [newInvites, setNewInvites] = useState<string[]>([]);
 
-  useEffect(() => {
-    loadTab(tab);
-  }, [tab]);
-
-  async function loadTab(t: Tab) {
+  const loadTab = useCallback(async (t: Tab) => {
     setLoading(true);
     try {
       if (t === "overview") {
@@ -113,18 +117,27 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin?section=invites");
         const d = await res.json();
         setInvites(d.invites ?? []);
+      } else if (t === "logs") {
+        const res = await fetch("/api/admin?section=logs");
+        const d = await res.json();
+        setLogs(d.logs ?? []);
       }
     } catch {
       toast.error("Failed to load data.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadTab(tab);
+  }, [tab, loadTab]);
 
   async function generateInvites() {
     try {
-      await adminAction({ action: "generate_invite", count: inviteCount });
+      const data = await adminAction({ action: "generate_invite", count: inviteCount });
       toast.success(`Generated ${inviteCount} invite codes.`);
+      setNewInvites(data.codes ?? []);
       loadTab("invites");
       setTab("invites");
     } catch {
@@ -135,8 +148,12 @@ export default function AdminDashboard() {
   async function banUser(userId: string, type: "temporary" | "permanent" | "shadowban") {
     try {
       await adminAction({ action: "ban", userId, type, reason: "Admin action" });
-      toast.success(`User ${type}banned.`);
-      loadTab("users");
+      toast.success(`User ${type === "shadowban" ? "shadowbanned" : "banned"}.`);
+      setUsers((prev) => prev.map((u) => u.id === userId ? {
+        ...u,
+        is_banned: type !== "shadowban",
+        is_shadowbanned: type === "shadowban",
+      } : u));
     } catch {
       toast.error("Action failed.");
     }
@@ -146,7 +163,17 @@ export default function AdminDashboard() {
     try {
       await adminAction({ action: "unban", userId });
       toast.success("User unbanned.");
-      loadTab("users");
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_banned: false, is_shadowbanned: false } : u));
+    } catch {
+      toast.error("Action failed.");
+    }
+  }
+
+  async function toggleMute(userId: string, isMuted: boolean) {
+    try {
+      await adminAction({ action: isMuted ? "unmute" : "mute", userId });
+      toast.success(isMuted ? "User unmuted." : "User muted.");
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_muted: !isMuted } : u));
     } catch {
       toast.error("Action failed.");
     }
@@ -188,6 +215,7 @@ export default function AdminDashboard() {
     { id: "reports", label: "reports", icon: <Flag size={13} /> },
     { id: "whispers", label: "whispers", icon: <Radio size={13} /> },
     { id: "invites", label: "invites", icon: <Key size={13} /> },
+    { id: "logs", label: "logs", icon: <ScrollText size={13} /> },
   ];
 
   return (
@@ -249,7 +277,6 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              {/* Quick actions */}
               <div className="bb-card px-4 py-4">
                 <p className="text-[#888] text-xs uppercase tracking-wider mb-3">quick actions</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -272,9 +299,16 @@ export default function AdminDashboard() {
                       </button>
                     </div>
                     {newInvites.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="space-y-1 mt-2">
+                        <p className="text-[#555] text-[10px] uppercase tracking-wider">generated codes</p>
                         {newInvites.map((code) => (
-                          <p key={code} className="text-[#4a7aa8] text-xs font-mono">{code}</p>
+                          <button
+                            key={code}
+                            onClick={() => { navigator.clipboard.writeText(code); toast.success("Code copied!"); }}
+                            className="block text-[#4a7aa8] text-xs font-mono hover:text-[#5a8ab8] transition-colors"
+                          >
+                            {code}
+                          </button>
                         ))}
                       </div>
                     )}
@@ -291,7 +325,7 @@ export default function AdminDashboard() {
                 {users.map((user) => (
                   <div key={user.id} className="bb-card px-4 py-3 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-[#d0d0d0] text-sm font-medium">{user.display_name}</p>
                         <span className="text-[#555] text-xs">@{user.username}</span>
                         {user.role !== "student" && (
@@ -299,13 +333,14 @@ export default function AdminDashboard() {
                         )}
                         {user.is_banned && <span className="text-red-400 text-[10px]">banned</span>}
                         {user.is_shadowbanned && <span className="text-orange-400/70 text-[10px]">shadowban</span>}
-                        {user.is_suspicious && <span className="text-yellow-400/70 text-[10px]">!</span>}
+                        {user.is_muted && <span className="text-yellow-400/70 text-[10px]">muted</span>}
+                        {user.is_suspicious && <span className="text-yellow-400/70 text-[10px]">⚠</span>}
                       </div>
                       <p className="text-[#444] text-xs mt-0.5">
-                        trust: {user.trust_score} &middot; aura: {user.aura_score} &middot; {user.class_name ?? "no class"} &middot; joined {formatRelativeTime(user.created_at)}
+                        trust: {user.trust_score} · aura: {user.aura_score} · {user.class_name ?? "no class"} · joined {formatRelativeTime(user.created_at)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
                       {user.is_banned ? (
                         <button
                           onClick={() => unbanUser(user.id)}
@@ -329,6 +364,14 @@ export default function AdminDashboard() {
                           </button>
                         </>
                       )}
+                      <button
+                        onClick={() => toggleMute(user.id, user.is_muted)}
+                        className={`px-2 py-1 text-[10px] bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg transition-colors
+                          ${user.is_muted ? "text-yellow-400 hover:text-green-400 hover:border-green-500/30" : "text-[#777] hover:text-yellow-400/70 hover:border-yellow-500/30"}`}
+                        title={user.is_muted ? "Unmute" : "Mute"}
+                      >
+                        {user.is_muted ? <Volume2 size={10} /> : <VolumeX size={10} />}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -389,6 +432,11 @@ export default function AdminDashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <p className="text-[#d0d0d0] text-sm leading-relaxed">{w.content}</p>
+                          {w.image_url && (
+                            <a href={w.image_url} target="_blank" rel="noopener noreferrer" className="text-[#4a7aa8] text-xs mt-1 block hover:underline">
+                              view attached image
+                            </a>
+                          )}
                           <p className="text-[#444] text-xs mt-1.5">{formatRelativeTime(w.created_at)} · {w.status}</p>
                         </div>
                         {w.status === "pending" && (
@@ -418,6 +466,22 @@ export default function AdminDashboard() {
           {/* INVITES */}
           {tab === "invites" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {newInvites.length > 0 && (
+                <div className="bb-card px-4 py-3 mb-3 border-[#2a4a68]">
+                  <p className="text-[#4a7aa8] text-xs font-medium mb-2">recently generated</p>
+                  <div className="flex flex-wrap gap-2">
+                    {newInvites.map((code) => (
+                      <button
+                        key={code}
+                        onClick={() => { navigator.clipboard.writeText(code); toast.success("Copied!"); }}
+                        className="text-[#4a7aa8] text-sm font-mono bg-[#1a2f44] px-2 py-1 rounded hover:bg-[#1a3f58] transition-colors"
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="space-y-1">
                 {invites.map((invite) => (
                   <div key={invite.id} className="bb-card px-4 py-2.5 flex items-center justify-between">
@@ -438,6 +502,41 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
+            </motion.div>
+          )}
+
+          {/* LOGS */}
+          {tab === "logs" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {logs.length === 0 ? (
+                <div className="text-center py-12">
+                  <ScrollText size={28} className="text-[#333] mx-auto mb-3" />
+                  <p className="text-[#444] text-sm">no moderation logs</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {logs.map((log) => (
+                    <div key={log.id} className="bb-card px-4 py-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[#d0d0d0] text-sm font-medium capitalize">{log.action.replace(/_/g, " ")}</span>
+                            <span className="text-[#444] text-xs">{formatRelativeTime(log.created_at)}</span>
+                          </div>
+                          <p className="text-[#555] text-xs mt-0.5">
+                            by @{(log.profiles as unknown as { username: string } | null)?.username ?? "system"}
+                          </p>
+                          {log.details && Object.keys(log.details).length > 0 && (
+                            <p className="text-[#444] text-xs mt-0.5 font-mono">
+                              {JSON.stringify(log.details).slice(0, 80)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </>

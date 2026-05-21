@@ -23,6 +23,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Content not allowed." }, { status: 400 });
   }
 
+  // Rate limit: max 5 whispers per hour
+  const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
+  const { count: recentCount } = await supabase
+    .from("whispers")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", oneHourAgo);
+
+  if ((recentCount ?? 0) >= 20) {
+    return NextResponse.json({ error: "Too many submissions. Try again later." }, { status: 429 });
+  }
+
   await supabase.from("whispers").insert({
     content,
     image_url: imageUrl ?? null,

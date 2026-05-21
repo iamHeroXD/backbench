@@ -21,41 +21,51 @@ export async function POST(
 
   const { type } = parsed.data;
 
-  // Toggle reaction
+  // Fetch any existing reaction(s) by this user on this post
   const { data: existing } = await supabase
     .from("reactions")
-    .select("id")
+    .select("id, type")
     .eq("user_id", user.id)
-    .eq("post_id", postId)
-    .eq("type", type)
+    .eq("post_id", postId);
+
+  const hadSameType = existing?.some((r) => r.type === type);
+
+  // Remove all existing reactions from this user on this post
+  if (existing && existing.length > 0) {
+    await supabase
+      .from("reactions")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("post_id", postId);
+  }
+
+  // If the user clicked the same reaction they already had — it was a toggle-off
+  if (hadSameType) {
+    return NextResponse.json({ action: "removed" });
+  }
+
+  // Insert new reaction
+  await supabase.from("reactions").insert({
+    user_id: user.id,
+    post_id: postId,
+    type,
+  });
+
+  // Notify post author (not self)
+  const { data: post } = await supabase
+    .from("posts")
+    .select("author_id")
+    .eq("id", postId)
     .single();
 
-  if (existing) {
-    await supabase.from("reactions").delete().eq("id", existing.id);
-    return NextResponse.json({ action: "removed" });
-  } else {
-    await supabase.from("reactions").insert({
-      user_id: user.id,
+  if (post && post.author_id !== user.id) {
+    await supabase.from("notifications").insert({
+      user_id: post.author_id,
+      actor_id: user.id,
+      type: "reaction",
       post_id: postId,
-      type,
     });
-
-    // Notify post author (not self)
-    const { data: post } = await supabase
-      .from("posts")
-      .select("author_id")
-      .eq("id", postId)
-      .single();
-
-    if (post && post.author_id !== user.id) {
-      await supabase.from("notifications").insert({
-        user_id: post.author_id,
-        actor_id: user.id,
-        type: "reaction",
-        post_id: postId,
-      });
-    }
-
-    return NextResponse.json({ action: "added" });
   }
+
+  return NextResponse.json({ action: "added" });
 }

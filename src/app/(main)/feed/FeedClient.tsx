@@ -19,15 +19,16 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [tab, setTab] = useState<"for-you" | "latest">("for-you");
-  const initialized = useRef(false);
+  const mountedRef = useRef(false);
 
   const { ref: loadMoreRef, inView } = useInView({ threshold: 0, rootMargin: "200px" });
 
   const isAdmin = currentUser.role === "admin" || currentUser.role === "moderator";
 
-  const fetchPosts = useCallback(async (cursor?: string) => {
+  const fetchPosts = useCallback(async (cursor?: string, sortTab?: "for-you" | "latest") => {
     try {
-      const url = `/api/posts?limit=20${cursor ? `&cursor=${cursor}` : ""}`;
+      const sort = sortTab ?? "for-you";
+      const url = `/api/posts?limit=20${cursor ? `&cursor=${cursor}` : ""}${sort === "latest" ? "&sort=latest" : ""}`;
       const res = await fetch(url);
       return await res.json();
     } catch {
@@ -35,36 +36,50 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
     }
   }, []);
 
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    const data = await fetchPosts(nextCursor);
-    setPosts((prev) => [...prev, ...(data.posts ?? [])]);
-    setNextCursor(data.nextCursor);
-    setHasMore(!!data.nextCursor);
-    setLoadingMore(false);
-  }, [fetchPosts, nextCursor, loadingMore]);
-
-  const refreshFeed = useCallback(async () => {
+  const loadFeed = useCallback(async (sortTab: "for-you" | "latest") => {
     setLoading(true);
-    const data = await fetchPosts();
+    setNextCursor(null);
+    setHasMore(true);
+    const data = await fetchPosts(undefined, sortTab);
     setPosts(data.posts ?? []);
-    setNextCursor(data.nextCursor);
+    setNextCursor(data.nextCursor ?? null);
     setHasMore(!!data.nextCursor);
     setLoading(false);
   }, [fetchPosts]);
 
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    refreshFeed();
-  }, [refreshFeed]);
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const data = await fetchPosts(nextCursor, tab);
+    setPosts((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const newPosts = (data.posts ?? []).filter((p: PostWithAuthor) => !existingIds.has(p.id));
+      return [...prev, ...newPosts];
+    });
+    setNextCursor(data.nextCursor ?? null);
+    setHasMore(!!data.nextCursor);
+    setLoadingMore(false);
+  }, [fetchPosts, nextCursor, loadingMore, tab]);
 
+  // Initial load
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    loadFeed("for-you");
+  }, [loadFeed]);
+
+  // Infinite scroll
   useEffect(() => {
     if (inView && hasMore && !loadingMore && !loading && nextCursor) {
       loadMore();
     }
   }, [inView, hasMore, loadingMore, loading, nextCursor, loadMore]);
+
+  function handleTabSwitch(t: "for-you" | "latest") {
+    if (t === tab) return;
+    setTab(t);
+    loadFeed(t);
+  }
 
   function handleDeletePost(id: string) {
     setPosts((prev) => prev.filter((p) => p.id !== id));
@@ -77,14 +92,14 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
       <CreatePost
         userAvatar={currentUser.avatar_url}
         displayName={currentUser.display_name}
-        onPostCreated={refreshFeed}
+        onPostCreated={() => loadFeed(tab)}
       />
 
       <div className="flex gap-1 mx-3 mb-3">
         {(["for-you", "latest"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => handleTabSwitch(t)}
             className={`px-4 py-1.5 text-xs rounded-lg transition-colors capitalize
               ${tab === t ? "bg-[#1e1e1e] text-[#f0f0f0]" : "text-[#555] hover:text-[#888]"}`}
           >

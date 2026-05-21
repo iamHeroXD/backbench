@@ -19,7 +19,7 @@ const NOTIF_ICONS: Record<string, React.ReactNode> = {
   reply: <MessageSquare size={14} className="text-[#4a7aa8]" />,
   mention: <MessageSquare size={14} className="text-[#888]" />,
   follow: <UserPlus size={14} className="text-[#4a7aa8]" />,
-  reaction: <span className="text-sm">{"fire"}</span>,
+  reaction: <span className="text-sm">🔥</span>,
   announcement: <Megaphone size={14} className="text-[#4a7aa8]" />,
   invite_accepted: <UserPlus size={14} className="text-green-500/70" />,
 };

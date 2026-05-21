@@ -1,11 +1,12 @@
 // Backbench Service Worker
-const CACHE_NAME = "backbench-v1";
+const CACHE_NAME = "backbench-v2";
 const STATIC_ASSETS = [
   "/",
   "/login",
   "/feed",
   "/manifest.json",
   "/logoofbackbench.png",
+  "/offline.html",
 ];
 
 // Install
@@ -91,12 +92,12 @@ self.addEventListener("fetch", (event) => {
         caches.match(request).then(
           (cached) =>
             cached ||
-            caches.match("/").then(
+            caches.match("/offline.html").then(
               (fallback) =>
                 fallback ||
-                new Response("You are offline. Please check your connection.", {
+                new Response("<html><body><h1>You are offline</h1></body></html>", {
                   status: 503,
-                  headers: { "Content-Type": "text/plain" },
+                  headers: { "Content-Type": "text/html" },
                 })
             )
         )

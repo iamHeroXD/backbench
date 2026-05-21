@@ -8,6 +8,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("mute"), userId: z.string().uuid() }),
   z.object({ action: z.literal("unmute"), userId: z.string().uuid() }),
   z.object({ action: z.literal("delete_post"), postId: z.string().uuid() }),
+  z.object({ action: z.literal("delete_comment"), commentId: z.string().uuid() }),
   z.object({ action: z.literal("pin_post"), postId: z.string().uuid() }),
   z.object({ action: z.literal("unpin_post"), postId: z.string().uuid() }),
   z.object({ action: z.literal("generate_invite"), count: z.number().min(1).max(50) }),
@@ -87,6 +88,12 @@ export async function POST(request: NextRequest) {
       break;
     }
 
+    case "delete_comment": {
+      await supabase.from("comments").update({ is_deleted: true }).eq("id", data.commentId);
+      await supabase.from("moderation_logs").insert({ mod_id: mod.id, action: "delete_comment", details: { commentId: data.commentId } });
+      break;
+    }
+
     case "pin_post": {
       await supabase.from("posts").update({ is_pinned: true }).eq("id", data.postId);
       break;
@@ -105,7 +112,7 @@ export async function POST(request: NextRequest) {
         status: "active" as const,
       }));
       await supabase.from("invites").insert(invites);
-      break;
+      return NextResponse.json({ success: true, codes: invites.map((i) => i.code) });
     }
 
     case "revoke_invite": {

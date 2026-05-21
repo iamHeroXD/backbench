@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Send, CornerDownRight } from "lucide-react";
+import { Send, CornerDownRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatRelativeTime, getAvatarFallback } from "@/lib/utils";
 import type { CommentWithAuthor } from "@/lib/types/database";
@@ -11,11 +11,13 @@ import type { CommentWithAuthor } from "@/lib/types/database";
 interface CommentSectionProps {
   postId: string;
   currentUserId: string;
+  isAdmin?: boolean;
 }
 
 export default function CommentSection({
   postId,
   currentUserId,
+  isAdmin,
 }: CommentSectionProps) {
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +73,22 @@ export default function CommentSection({
     }
   }
 
+  async function deleteComment(commentId: string) {
+    if (!confirm("Delete this comment?")) return;
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_comment", commentId }),
+      });
+      if (!res.ok) throw new Error();
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      toast.success("Comment deleted.");
+    } catch {
+      toast.error("Failed to delete comment.");
+    }
+  }
+
   const topLevel = comments.filter((c) => !c.parent_id);
   const replies = comments.filter((c) => c.parent_id);
 
@@ -97,11 +115,13 @@ export default function CommentSection({
               key={comment.id}
               comment={comment}
               replies={getReplies(comment.id)}
-              viewerUserId={currentUserId}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
               onReply={(id, username) => {
                 setReplyTo({ id, username });
                 inputRef.current?.focus();
               }}
+              onDelete={deleteComment}
             />
           ))}
         </div>
@@ -152,13 +172,17 @@ export default function CommentSection({
 interface CommentItemProps {
   comment: CommentWithAuthor;
   replies: CommentWithAuthor[];
-  viewerUserId: string;
+  currentUserId: string;
+  isAdmin?: boolean;
   onReply: (id: string, username: string) => void;
+  onDelete: (id: string) => void;
 }
 
-function CommentItem({ comment, replies, onReply }: CommentItemProps) {
+function CommentItem({ comment, replies, currentUserId, isAdmin, onReply, onDelete }: CommentItemProps) {
   const author = comment.profiles;
   const [showReplies, setShowReplies] = useState(false);
+  const isOwn = author?.id === currentUserId;
+  const canDelete = isOwn || isAdmin;
 
   return (
     <div className="space-y-2">
@@ -187,6 +211,15 @@ function CommentItem({ comment, replies, onReply }: CommentItemProps) {
             <span className="text-[#444] text-[10px]">
               {formatRelativeTime(comment.created_at)}
             </span>
+            {canDelete && (
+              <button
+                onClick={() => onDelete(comment.id)}
+                className="text-[#333] hover:text-red-400 transition-colors ml-auto"
+                title="Delete comment"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
           </div>
           <p className="text-[#aaa] text-xs leading-relaxed mt-0.5 break-words">
             {comment.content}
@@ -236,7 +269,7 @@ function CommentItem({ comment, replies, onReply }: CommentItemProps) {
                     </span>
                   )}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-[#d0d0d0] text-[11px] font-medium">
                       {reply.profiles?.display_name ?? "unknown"}
@@ -244,6 +277,15 @@ function CommentItem({ comment, replies, onReply }: CommentItemProps) {
                     <span className="text-[#444] text-[10px]">
                       {formatRelativeTime(reply.created_at)}
                     </span>
+                    {(reply.profiles?.id === currentUserId || isAdmin) && (
+                      <button
+                        onClick={() => onDelete(reply.id)}
+                        className="text-[#333] hover:text-red-400 transition-colors ml-auto"
+                        title="Delete reply"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    )}
                   </div>
                   <p className="text-[#aaa] text-[11px] leading-relaxed mt-0.5">
                     {reply.content}

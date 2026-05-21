@@ -417,6 +417,6 @@ export type PostWithAuthor = Post & {
 };
 
 export type CommentWithAuthor = Comment & {
-  profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url">;
+  profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url"> | null;
   replies?: CommentWithAuthor[];
 };

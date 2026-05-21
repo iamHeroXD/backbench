@@ -25,7 +25,7 @@ INSERT INTO profiles (
   trust_score,
   aura_score
 ) VALUES (
-  'PASTE_ADMIN_UUID_HERE',  -- Replace with actual UUID from auth.users
+  '5fba7b0a-c3db-4deb-bb64-149e4ee13268',  -- Replace with actual UUID from auth.users
   'adminisreal',            -- Admin username (as specified)
   'Admin',
   'admin',
@@ -47,7 +47,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO invites (code, created_by, status)
 SELECT
   'VHSS-' || upper(substring(md5(random()::text), 1, 4)) || '-' || upper(substring(md5(random()::text), 1, 4)),
-  'PASTE_ADMIN_UUID_HERE',
+  '5fba7b0a-c3db-4deb-bb64-149e4ee13268',
   'active'
 FROM generate_series(1, 20);
 

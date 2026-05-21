@@ -26,14 +26,17 @@ export default function WhispersPage() {
 
     let imageUrl: string | null = null;
     if (imageFile) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const path = `whispers/${Date.now()}.${imageFile.name.split(".").pop()}`;
-        const { error } = await supabase.storage.from("whispers").upload(path, imageFile);
-        if (!error) {
-          const { data } = supabase.storage.from("whispers").getPublicUrl(path);
-          imageUrl = data.publicUrl;
-        }
+      const ext = imageFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+      const contentTypeMap: Record<string, string> = {
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+      };
+      const contentType = contentTypeMap[ext] ?? imageFile.type ?? "image/jpeg";
+      // Use anonymous path — random ID only, no user reference
+      const path = `whispers/${Math.random().toString(36).slice(2)}-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("posts").upload(path, imageFile, { contentType });
+      if (!error) {
+        const { data } = supabase.storage.from("posts").getPublicUrl(path);
+        imageUrl = data.publicUrl;
       }
     }
 

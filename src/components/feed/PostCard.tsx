@@ -13,6 +13,7 @@ import { formatRelativeTime, REACTION_EMOJIS, getAvatarFallback } from "@/lib/ut
 import type { PostWithAuthor } from "@/lib/types/database";
 import ReactionBar from "./ReactionBar";
 import CommentSection from "./CommentSection";
+import { createClient } from "@/lib/supabase/client";
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -22,9 +23,11 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, currentUserId, isAdmin, onDelete }: PostCardProps) {
+  const supabase = createClient();
   const [showComments, setShowComments] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isPinned, setIsPinned] = useState(post.is_pinned);
 
   const author = post.profiles;
   const isOwn = author?.id === currentUserId;
@@ -46,22 +49,67 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
   const userReaction = post.reactions.find((r) => r.user_id === currentUserId)?.type;
 
   async function handleBookmark() {
-    setIsBookmarked((b) => !b);
-    toast.success(isBookmarked ? "Removed from bookmarks" : "Saved to bookmarks");
+    try {
+      if (isBookmarked) {
+        await supabase.from("bookmarks").delete()
+          .eq("user_id", currentUserId)
+          .eq("post_id", post.id);
+        setIsBookmarked(false);
+        toast.success("Removed from bookmarks");
+      } else {
+        await supabase.from("bookmarks").insert({ user_id: currentUserId, post_id: post.id });
+        setIsBookmarked(true);
+        toast.success("Saved to bookmarks");
+      }
+    } catch {
+      toast.error("Bookmark failed.");
+    }
   }
 
   async function handleDelete() {
     if (!confirm("Delete this post?")) return;
     try {
-      await fetch(`/api/admin`, {
+      const res = await fetch(`/api/admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete_post", postId: post.id }),
       });
+      if (!res.ok) throw new Error();
       onDelete?.(post.id);
       toast.success("Post deleted.");
     } catch {
       toast.error("Failed to delete post.");
+    }
+  }
+
+  async function handlePin() {
+    const action = isPinned ? "unpin_post" : "pin_post";
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, postId: post.id }),
+      });
+      if (!res.ok) throw new Error();
+      setIsPinned(!isPinned);
+      toast.success(isPinned ? "Post unpinned." : "Post pinned.");
+    } catch {
+      toast.error("Failed to pin post.");
+    }
+    setShowMenu(false);
+  }
+
+  async function handleShare() {
+    const url = `${window.location.origin}/feed`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Backbench post", url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copied!");
+      }
+    } catch {
+      // user cancelled
     }
   }
 
@@ -70,7 +118,7 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
       className="post-appear bb-card mx-3 mb-3 overflow-hidden"
       layout
     >
-      {post.is_pinned && (
+      {isPinned && (
         <div className="flex items-center gap-1.5 px-4 pt-3 pb-1">
           <Pin size={11} className="text-[#4a7aa8]" />
           <span className="text-[#4a7aa8] text-xs font-medium">pinned</span>
@@ -145,13 +193,11 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
                 )}
                 {isAdmin && (
                   <button
-                    onClick={() => {
-                      // Pin handled by admin dashboard
-                    }}
+                    onClick={handlePin}
                     className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[#888] text-sm hover:bg-[#222] transition-colors"
                   >
                     <Pin size={13} />
-                    <span>pin post</span>
+                    <span>{isPinned ? "unpin" : "pin post"}</span>
                   </button>
                 )}
                 {!isOwn && (
@@ -243,7 +289,10 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
             <Bookmark size={14} fill={isBookmarked ? "currentColor" : "none"} />
           </button>
 
-          <button className="px-2 py-1.5 text-[#666] hover:text-[#aaa] rounded-lg hover:bg-[#1e1e1e] transition-colors">
+          <button
+            onClick={handleShare}
+            className="px-2 py-1.5 text-[#666] hover:text-[#aaa] rounded-lg hover:bg-[#1e1e1e] transition-colors"
+          >
             <Share2 size={14} />
           </button>
 
@@ -264,7 +313,11 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
             transition={{ duration: 0.25 }}
             className="overflow-hidden border-t border-[#1e1e1e]"
           >
-            <CommentSection postId={post.id} currentUserId={currentUserId} />
+            <CommentSection
+              postId={post.id}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+            />
           </motion.div>
         )}
       </AnimatePresence>
