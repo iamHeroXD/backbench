@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+export const dynamic = "force-dynamic";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Bell, MessageSquare, UserPlus, Megaphone } from "lucide-react";
@@ -17,7 +19,7 @@ const NOTIF_ICONS: Record<string, React.ReactNode> = {
   reply: <MessageSquare size={14} className="text-[#4a7aa8]" />,
   mention: <MessageSquare size={14} className="text-[#888]" />,
   follow: <UserPlus size={14} className="text-[#4a7aa8]" />,
-  reaction: <span className="text-sm">🔥</span>,
+  reaction: <span className="text-sm">{"fire"}</span>,
   announcement: <Megaphone size={14} className="text-[#4a7aa8]" />,
   invite_accepted: <UserPlus size={14} className="text-green-500/70" />,
 };
@@ -33,16 +35,18 @@ const NOTIF_TEXT: Record<string, (actor: string, msg?: string | null) => string>
 };
 
 export default function NotificationsPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [notifications, setNotifications] = useState<NotifWithActor[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchNotifications();
-    markAllRead();
-  }, []);
+  const markAllRead = useCallback(async () => {
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("is_read", false);
+  }, [supabase]);
 
-  async function fetchNotifications() {
+  const fetchNotifications = useCallback(async () => {
     const { data } = await supabase
       .from("notifications")
       .select("*, profiles!actor_id(username, display_name, avatar_url)")
@@ -50,20 +54,20 @@ export default function NotificationsPage() {
       .limit(50);
     setNotifications((data ?? []) as NotifWithActor[]);
     setLoading(false);
-  }
+  }, [supabase]);
 
-  async function markAllRead() {
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("is_read", false);
-  }
+  useEffect(() => {
+    fetchNotifications();
+    markAllRead();
+  }, [fetchNotifications, markAllRead]);
 
   return (
     <div className="pt-2 px-3">
       {loading ? (
         <div className="space-y-2">
-          {[1,2,3,4].map(i => <div key={i} className="shimmer h-16 rounded-xl" />)}
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="shimmer h-16 rounded-xl" />
+          ))}
         </div>
       ) : notifications.length === 0 ? (
         <div className="text-center py-16">
@@ -75,7 +79,10 @@ export default function NotificationsPage() {
           {notifications.map((notif, i) => {
             const actor = notif.profiles;
             const actorName = actor?.display_name ?? "someone";
-            const text = NOTIF_TEXT[notif.type]?.(actorName, notif.message) ?? notif.message ?? "New notification";
+            const text =
+              NOTIF_TEXT[notif.type]?.(actorName, notif.message) ??
+              notif.message ??
+              "New notification";
 
             return (
               <motion.div
@@ -86,11 +93,16 @@ export default function NotificationsPage() {
                 className={`flex items-start gap-3 px-3 py-3 rounded-xl transition-colors
                   ${!notif.is_read ? "bg-[#141414]" : "hover:bg-[#111]"}`}
               >
-                {/* Actor avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="w-9 h-9 rounded-full bg-[#222] overflow-hidden flex items-center justify-center">
                     {actor?.avatar_url ? (
-                      <Image src={actor.avatar_url} alt="" width={36} height={36} className="object-cover w-full h-full" />
+                      <Image
+                        src={actor.avatar_url}
+                        alt=""
+                        width={36}
+                        height={36}
+                        className="object-cover w-full h-full"
+                      />
                     ) : (
                       <span className="text-xs text-[#888]">
                         {actor ? getAvatarFallback(actor.display_name) : "?"}
@@ -98,17 +110,19 @@ export default function NotificationsPage() {
                     )}
                   </div>
                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[#0a0a0a] rounded-full flex items-center justify-center">
-                    {NOTIF_ICONS[notif.type] ?? <Bell size={10} className="text-[#888]" />}
+                    {NOTIF_ICONS[notif.type] ?? (
+                      <Bell size={10} className="text-[#888]" />
+                    )}
                   </div>
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[#d0d0d0] text-sm leading-snug">{text}</p>
-                  <p className="text-[#444] text-xs mt-0.5">{formatRelativeTime(notif.created_at)}</p>
+                  <p className="text-[#444] text-xs mt-0.5">
+                    {formatRelativeTime(notif.created_at)}
+                  </p>
                 </div>
 
-                {/* Unread dot */}
                 {!notif.is_read && (
                   <div className="w-1.5 h-1.5 bg-[#4a7aa8] rounded-full mt-2 flex-shrink-0" />
                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
@@ -16,16 +16,16 @@ type StoryGroup = {
   seen: boolean;
 };
 
-export default function StoryBar({ currentUserId }: { currentUserId: string }) {
-  const supabase = createClient();
+export default function StoryBar({
+  currentUserId,
+}: {
+  currentUserId: string;
+}) {
+  const supabase = useMemo(() => createClient(), []);
   const [groups, setGroups] = useState<StoryGroup[]>([]);
   const [viewing, setViewing] = useState<StoryGroup | null>(null);
 
-  useEffect(() => {
-    fetchStories();
-  }, []);
-
-  async function fetchStories() {
+  const fetchStories = useCallback(async () => {
     const { data: stories } = await supabase
       .from("stories")
       .select("*, profiles!author_id(id, username, display_name, avatar_url)")
@@ -36,7 +36,10 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
 
     const groupMap = new Map<string, StoryGroup>();
     for (const story of stories) {
-      const author = story.profiles as unknown as Pick<Profile, "id" | "username" | "display_name" | "avatar_url">;
+      const author = story.profiles as unknown as Pick<
+        Profile,
+        "id" | "username" | "display_name" | "avatar_url"
+      >;
       if (!author) continue;
 
       if (!groupMap.has(author.id)) {
@@ -45,7 +48,6 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
       groupMap.get(author.id)!.stories.push(story);
     }
 
-    // Check views
     const storyIds = stories.map((s) => s.id);
     if (storyIds.length > 0) {
       const { data: views } = await supabase
@@ -69,12 +71,20 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
     });
 
     setGroups(sortedGroups);
-  }
+  }, [supabase, currentUserId]);
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
+
+  const handleClose = useCallback(() => {
+    setViewing(null);
+    fetchStories();
+  }, [fetchStories]);
 
   return (
     <>
       <div className="flex items-center gap-3 px-4 py-3 overflow-x-auto scrollbar-hide">
-        {/* Add story */}
         <div className="flex flex-col items-center gap-1 flex-shrink-0">
           <button
             onClick={() => toast("Story creation coming soon.")}
@@ -94,7 +104,11 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
             whileTap={{ scale: 0.95 }}
             onClick={() => setViewing(group)}
           >
-            <div className={`w-14 h-14 rounded-full p-[2px] ${group.seen ? "bg-[#2a2a2a]" : "story-ring"}`}>
+            <div
+              className={`w-14 h-14 rounded-full p-[2px] ${
+                group.seen ? "bg-[#2a2a2a]" : "story-ring"
+              }`}
+            >
               <div className="w-full h-full rounded-full bg-[#141414] overflow-hidden flex items-center justify-center">
                 {group.author.avatar_url ? (
                   <Image
@@ -122,7 +136,7 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
         <StoryViewer
           group={viewing}
           currentUserId={currentUserId}
-          onClose={() => { setViewing(null); fetchStories(); }}
+          onClose={handleClose}
         />
       )}
     </>

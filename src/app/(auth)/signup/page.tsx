@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+
+export const dynamic = "force-dynamic";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -137,7 +140,7 @@ function SignupForm() {
           />
           {errors.displayName && <FieldError msg={errors.displayName} />}
           <p className="text-[#444] text-xs mt-1 pl-1">
-            Use your real name or an alias — your choice.
+            Use your real name or an alias &mdash; your choice.
           </p>
         </div>
 

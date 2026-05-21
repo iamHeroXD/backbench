@@ -1,19 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
+import type { Profile } from "@/lib/types/database";
 import FeedClient from "./FeedClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: rawProfile } = await supabase
     .from("profiles")
-    .select("id, username, display_name, avatar_url, role, is_shadowbanned")
+    .select("*")
     .eq("id", user.id)
     .single();
 
-  return <FeedClient currentUser={profile!} />;
+  const profile = rawProfile as Profile | null;
+  if (!profile) return null;
+
+  return <FeedClient currentUser={profile} />;
 }

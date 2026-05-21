@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+
+export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
@@ -52,7 +55,7 @@ export default function SearchPage() {
         posts: (postsRes.data ?? []).map((p) => ({
           id: p.id,
           content: p.content?.slice(0, 100) ?? "",
-          author: (p.profiles as { display_name: string } | null)?.display_name ?? "unknown",
+          author: ((p.profiles as unknown) as { display_name: string } | null)?.display_name ?? "unknown",
         })),
       });
       setLoading(false);

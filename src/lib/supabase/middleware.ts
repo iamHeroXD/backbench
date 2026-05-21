@@ -1,11 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { Database } from "@/lib/types/database";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient<Database>(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -13,13 +12,13 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options as never)
           );
         },
       },
@@ -32,11 +31,8 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public routes (no auth required)
   const publicRoutes = ["/", "/login", "/signup", "/api/auth"];
   const isPublic = publicRoutes.some((r) => pathname.startsWith(r));
-
-  // Admin routes
   const isAdminRoute = pathname.startsWith("/admin");
 
   if (!user && !isPublic) {
@@ -46,7 +42,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/" || pathname === "/login" || pathname === "/signup")) {
+  if (
+    user &&
+    (pathname === "/" || pathname === "/login" || pathname === "/signup")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/feed";
     return NextResponse.redirect(url);
@@ -59,7 +58,8 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || !["admin", "moderator"].includes(profile.role)) {
+    const role = (profile as { role?: string } | null)?.role;
+    if (!role || !["admin", "moderator"].includes(role)) {
       const url = request.nextUrl.clone();
       url.pathname = "/feed";
       return NextResponse.redirect(url);

@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+
+export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -296,10 +299,10 @@ export default function AdminDashboard() {
                         )}
                         {user.is_banned && <span className="text-red-400 text-[10px]">banned</span>}
                         {user.is_shadowbanned && <span className="text-orange-400/70 text-[10px]">shadowban</span>}
-                        {user.is_suspicious && <span className="text-yellow-400/70 text-[10px]">⚠</span>}
+                        {user.is_suspicious && <span className="text-yellow-400/70 text-[10px]">!</span>}
                       </div>
                       <p className="text-[#444] text-xs mt-0.5">
-                        trust: {user.trust_score} · aura: {user.aura_score} · {user.class_name ?? "no class"} · joined {formatRelativeTime(user.created_at)}
+                        trust: {user.trust_score} &middot; aura: {user.aura_score} &middot; {user.class_name ?? "no class"} &middot; joined {formatRelativeTime(user.created_at)}
                       </p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">

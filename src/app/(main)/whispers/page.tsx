@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+
+export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -103,7 +106,7 @@ export default function WhispersPage() {
             onClick={() => setContent(ex)}
             className="block w-full text-left text-[#888] text-xs py-1 hover:text-[#aaa] transition-colors"
           >
-            → {ex}
+            -&gt; {ex}
           </button>
         ))}
       </div>

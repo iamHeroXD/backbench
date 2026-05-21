@@ -1,6 +1,9 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
+
+export const dynamic = "force-dynamic";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Plus, ChevronUp, Pin, BookOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +12,7 @@ import { CLASS_OPTIONS } from "@/lib/utils";
 import type { TomorrowItem } from "@/lib/types/database";
 
 export default function TomorrowPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [items, setItems] = useState<TomorrowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -20,19 +23,7 @@ export default function TomorrowPage() {
   const [forClass, setForClass] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: p } = await supabase.from("profiles").select("class_name").eq("id", user.id).single();
-        if (p?.class_name) setCurrentClass(p.class_name);
-      }
-      await fetchItems();
-    }
-    init();
-  }, []);
-
-  async function fetchItems() {
+  const fetchItems = useCallback(async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dateStr = tomorrow.toISOString().split("T")[0];
@@ -47,25 +38,53 @@ export default function TomorrowPage() {
 
     setItems(data ?? []);
 
-    // Fetch user's upvotes
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && data && data.length > 0) {
       const { data: uv } = await supabase
         .from("tomorrow_upvotes")
         .select("item_id")
         .eq("user_id", user.id)
-        .in("item_id", data.map((i) => i.id));
+        .in(
+          "item_id",
+          data.map((i) => i.id)
+        );
       setUpvoted(new Set((uv ?? []).map((v) => v.item_id)));
     }
     setLoading(false);
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    async function init() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("class_name")
+          .eq("id", user.id)
+          .single();
+        if (p?.class_name) setCurrentClass(p.class_name);
+      }
+      await fetchItems();
+    }
+    init();
+  }, [supabase, fetchItems]);
 
   async function submitItem() {
     if (!title.trim() || submitting) return;
     setSubmitting(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { toast.error("Not signed in."); setSubmitting(false); return; }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Not signed in.");
+      setSubmitting(false);
+      return;
+    }
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -78,7 +97,11 @@ export default function TomorrowPage() {
       date: tomorrow.toISOString().split("T")[0],
     });
 
-    if (error) { toast.error("Failed to add item."); setSubmitting(false); return; }
+    if (error) {
+      toast.error("Failed to add item.");
+      setSubmitting(false);
+      return;
+    }
 
     toast.success("Added to tomorrow board.");
     setTitle("");
@@ -90,26 +113,58 @@ export default function TomorrowPage() {
   }
 
   async function toggleUpvote(itemId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const isUp = upvoted.has(itemId);
     if (isUp) {
-      await supabase.from("tomorrow_upvotes").delete().eq("item_id", itemId).eq("user_id", user.id);
-      await supabase.from("tomorrow_items").update({ upvotes: Math.max(0, (items.find(i => i.id === itemId)?.upvotes ?? 1) - 1) }).eq("id", itemId);
-      setUpvoted((s) => { const n = new Set(s); n.delete(itemId); return n; });
-      setItems((prev) => prev.map((i) => i.id === itemId ? { ...i, upvotes: Math.max(0, i.upvotes - 1) } : i));
+      await supabase
+        .from("tomorrow_upvotes")
+        .delete()
+        .eq("item_id", itemId)
+        .eq("user_id", user.id);
+      const current = items.find((i) => i.id === itemId)?.upvotes ?? 1;
+      await supabase
+        .from("tomorrow_items")
+        .update({ upvotes: Math.max(0, current - 1) })
+        .eq("id", itemId);
+      setUpvoted((s) => {
+        const n = new Set(s);
+        n.delete(itemId);
+        return n;
+      });
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === itemId ? { ...i, upvotes: Math.max(0, i.upvotes - 1) } : i
+        )
+      );
     } else {
-      await supabase.from("tomorrow_upvotes").insert({ item_id: itemId, user_id: user.id });
-      await supabase.from("tomorrow_items").update({ upvotes: (items.find(i => i.id === itemId)?.upvotes ?? 0) + 1 }).eq("id", itemId);
+      await supabase
+        .from("tomorrow_upvotes")
+        .insert({ item_id: itemId, user_id: user.id });
+      const current = items.find((i) => i.id === itemId)?.upvotes ?? 0;
+      await supabase
+        .from("tomorrow_items")
+        .update({ upvotes: current + 1 })
+        .eq("id", itemId);
       setUpvoted((s) => new Set([...s, itemId]));
-      setItems((prev) => prev.map((i) => i.id === itemId ? { ...i, upvotes: i.upvotes + 1 } : i));
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === itemId ? { ...i, upvotes: i.upvotes + 1 } : i
+        )
+      );
     }
   }
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" });
+  const tomorrowStr = tomorrow.toLocaleDateString("en-IN", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   const filtered = currentClass
     ? items.filter((i) => !i.class_name || i.class_name === currentClass)
@@ -117,7 +172,6 @@ export default function TomorrowPage() {
 
   return (
     <div className="pt-2 px-3">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-[#f0f0f0] font-medium text-base">tomorrow</h1>
@@ -131,7 +185,6 @@ export default function TomorrowPage() {
         </button>
       </div>
 
-      {/* Add form */}
       {showForm && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -159,7 +212,11 @@ export default function TomorrowPage() {
               className="bb-input flex-1 text-sm"
             >
               <option value="">all classes</option>
-              {CLASS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              {CLASS_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
             <button
               onClick={submitItem}
@@ -172,16 +229,19 @@ export default function TomorrowPage() {
         </motion.div>
       )}
 
-      {/* Items */}
       {loading ? (
         <div className="space-y-2">
-          {[1,2,3].map(i => <div key={i} className="shimmer h-16 rounded-xl" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="shimmer h-16 rounded-xl" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
           <BookOpen size={28} className="text-[#333] mx-auto mb-3" />
           <p className="text-[#444] text-sm">nothing added yet for tomorrow.</p>
-          <p className="text-[#333] text-xs mt-1">be the first to post a reminder.</p>
+          <p className="text-[#333] text-xs mt-1">
+            be the first to post a reminder.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -193,11 +253,14 @@ export default function TomorrowPage() {
               transition={{ delay: i * 0.04 }}
               className="bb-card px-4 py-3 flex items-start gap-3"
             >
-              {/* Upvote */}
               <button
                 onClick={() => toggleUpvote(item.id)}
                 className={`flex flex-col items-center gap-0.5 mt-0.5 transition-colors
-                  ${upvoted.has(item.id) ? "text-[#4a7aa8]" : "text-[#444] hover:text-[#888]"}`}
+                  ${
+                    upvoted.has(item.id)
+                      ? "text-[#4a7aa8]"
+                      : "text-[#444] hover:text-[#888]"
+                  }`}
               >
                 <ChevronUp size={16} />
                 <span className="text-[10px]">{item.upvotes}</span>
@@ -205,11 +268,17 @@ export default function TomorrowPage() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  {item.is_pinned && <Pin size={11} className="text-[#4a7aa8]" />}
-                  <p className="text-[#d0d0d0] text-sm font-medium">{item.title}</p>
+                  {item.is_pinned && (
+                    <Pin size={11} className="text-[#4a7aa8]" />
+                  )}
+                  <p className="text-[#d0d0d0] text-sm font-medium">
+                    {item.title}
+                  </p>
                 </div>
                 {item.description && (
-                  <p className="text-[#777] text-xs mt-0.5 leading-relaxed">{item.description}</p>
+                  <p className="text-[#777] text-xs mt-0.5 leading-relaxed">
+                    {item.description}
+                  </p>
                 )}
                 {item.class_name && (
                   <span className="inline-block mt-1 px-2 py-0.5 bg-[#1a2f44] border border-[#2a4a68] rounded-full text-[#4a7aa8] text-[10px]">

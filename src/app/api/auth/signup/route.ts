@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/types/database";
 import { z } from "zod";
-
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -19,6 +13,11 @@ const signupSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
@@ -120,13 +119,15 @@ export async function POST(request: NextRequest) {
         root_id: rootId,
       });
 
-      // Reward inviter with trust
-      await supabase.rpc("adjust_trust_score" as never, {
-        p_user_id: invite.created_by,
-        p_delta: 5,
-      }).catch(() => {
+      // Reward inviter with trust (non-critical, best-effort)
+      try {
+        await supabase.rpc("adjust_trust_score" as never, {
+          p_user_id: invite.created_by,
+          p_delta: 5,
+        });
+      } catch {
         // Non-critical
-      });
+      }
 
       // Send notification to inviter
       await supabase.from("notifications").insert({

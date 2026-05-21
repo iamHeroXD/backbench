@@ -29,34 +29,13 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
     try {
       const url = `/api/posts?limit=20${cursor ? `&cursor=${cursor}` : ""}`;
       const res = await fetch(url);
-      const data = await res.json();
-      return data;
+      return await res.json();
     } catch {
       return { posts: [], nextCursor: null };
     }
   }, []);
 
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    (async () => {
-      setLoading(true);
-      const data = await fetchPosts();
-      setPosts(data.posts ?? []);
-      setNextCursor(data.nextCursor);
-      setHasMore(!!data.nextCursor);
-      setLoading(false);
-    })();
-  }, [fetchPosts]);
-
-  useEffect(() => {
-    if (inView && hasMore && !loadingMore && !loading && nextCursor) {
-      loadMore();
-    }
-  }, [inView, hasMore, loadingMore, loading, nextCursor]);
-
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     const data = await fetchPosts(nextCursor);
@@ -64,24 +43,28 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
     setNextCursor(data.nextCursor);
     setHasMore(!!data.nextCursor);
     setLoadingMore(false);
-  }
+  }, [fetchPosts, nextCursor, loadingMore]);
 
-  function handlePostCreated() {
-    // Refresh feed from top
-    initialized.current = false;
-    setPosts([]);
-    setNextCursor(null);
-    setHasMore(true);
+  const refreshFeed = useCallback(async () => {
+    setLoading(true);
+    const data = await fetchPosts();
+    setPosts(data.posts ?? []);
+    setNextCursor(data.nextCursor);
+    setHasMore(!!data.nextCursor);
+    setLoading(false);
+  }, [fetchPosts]);
+
+  useEffect(() => {
+    if (initialized.current) return;
     initialized.current = true;
-    (async () => {
-      setLoading(true);
-      const data = await fetchPosts();
-      setPosts(data.posts ?? []);
-      setNextCursor(data.nextCursor);
-      setHasMore(!!data.nextCursor);
-      setLoading(false);
-    })();
-  }
+    refreshFeed();
+  }, [refreshFeed]);
+
+  useEffect(() => {
+    if (inView && hasMore && !loadingMore && !loading && nextCursor) {
+      loadMore();
+    }
+  }, [inView, hasMore, loadingMore, loading, nextCursor, loadMore]);
 
   function handleDeletePost(id: string) {
     setPosts((prev) => prev.filter((p) => p.id !== id));
@@ -89,17 +72,14 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
 
   return (
     <div className="pt-2">
-      {/* Story bar */}
       <StoryBar currentUserId={currentUser.id} />
 
-      {/* Create post */}
       <CreatePost
         userAvatar={currentUser.avatar_url}
         displayName={currentUser.display_name}
-        onPostCreated={handlePostCreated}
+        onPostCreated={refreshFeed}
       />
 
-      {/* Feed tabs */}
       <div className="flex gap-1 mx-3 mb-3">
         {(["for-you", "latest"] as const).map((t) => (
           <button
@@ -113,7 +93,6 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
         ))}
       </div>
 
-      {/* Posts */}
       {loading ? (
         <FeedSkeleton />
       ) : posts.length === 0 ? (
@@ -143,7 +122,6 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
             </motion.div>
           ))}
 
-          {/* Infinite scroll trigger */}
           <div ref={loadMoreRef} className="py-4 flex justify-center">
             {loadingMore && (
               <div className="w-4 h-4 border border-[#333] border-t-[#888] rounded-full animate-spin" />

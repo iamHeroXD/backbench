@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+
+export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,12 +32,20 @@ export default function LoginPage() {
       return;
     }
 
-    // Check if banned
-    const { data: profile } = await supabase
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      toast.error("Sign in failed. Please try again.");
+      return;
+    }
+
+    // Check ban status and onboarding
+    const { data: rawProfile } = await supabase
       .from("profiles")
       .select("is_banned, onboarding_done")
-      .eq("id", (await supabase.auth.getUser()).data.user!.id)
+      .eq("id", currentUser.id)
       .single();
+
+    const profile = rawProfile as { is_banned: boolean; onboarding_done: boolean } | null;
 
     if (profile?.is_banned) {
       await supabase.auth.signOut();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Send, CornerDownRight } from "lucide-react";
@@ -13,19 +13,21 @@ interface CommentSectionProps {
   currentUserId: string;
 }
 
-export default function CommentSection({ postId, currentUserId }: CommentSectionProps) {
+export default function CommentSection({
+  postId,
+  currentUserId,
+}: CommentSectionProps) {
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
-  const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
+  const [replyTo, setReplyTo] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    fetchComments();
-  }, [postId]);
-
-  async function fetchComments() {
+  const fetchComments = useCallback(async () => {
     try {
       const res = await fetch(`/api/posts/${postId}/comments`);
       const data = await res.json();
@@ -35,7 +37,11 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
     } finally {
       setLoading(false);
     }
-  }
+  }, [postId]);
+
+  useEffect(() => {
+    fetchComments();
+  }, [fetchComments]);
 
   async function submitComment() {
     if (!text.trim() || submitting) return;
@@ -51,8 +57,10 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
         }),
       });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error ?? "Failed to comment."); return; }
-
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to comment.");
+        return;
+      }
       setComments((prev) => [...prev, data.comment]);
       setText("");
       setReplyTo(null);
@@ -63,7 +71,6 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
     }
   }
 
-  // Organize into threads
   const topLevel = comments.filter((c) => !c.parent_id);
   const replies = comments.filter((c) => c.parent_id);
 
@@ -80,7 +87,9 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
           ))}
         </div>
       ) : topLevel.length === 0 ? (
-        <p className="text-[#444] text-xs py-2">no comments yet. start the conversation.</p>
+        <p className="text-[#444] text-xs py-2">
+          no comments yet. start the conversation.
+        </p>
       ) : (
         <div className="space-y-3 mb-3">
           {topLevel.map((comment) => (
@@ -88,7 +97,7 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
               key={comment.id}
               comment={comment}
               replies={getReplies(comment.id)}
-              currentUserId={currentUserId}
+              viewerUserId={currentUserId}
               onReply={(id, username) => {
                 setReplyTo({ id, username });
                 inputRef.current?.focus();
@@ -98,7 +107,6 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
         </div>
       )}
 
-      {/* Input */}
       <div className="flex gap-2 items-end">
         <div className="flex-1 relative">
           {replyTo && (
@@ -141,16 +149,14 @@ export default function CommentSection({ postId, currentUserId }: CommentSection
   );
 }
 
-function CommentItem({
-  comment,
-  replies,
-  onReply,
-}: {
+interface CommentItemProps {
   comment: CommentWithAuthor;
   replies: CommentWithAuthor[];
-  currentUserId?: string;
+  viewerUserId: string;
   onReply: (id: string, username: string) => void;
-}) {
+}
+
+function CommentItem({ comment, replies, onReply }: CommentItemProps) {
   const author = comment.profiles;
   const [showReplies, setShowReplies] = useState(false);
 
@@ -159,7 +165,13 @@ function CommentItem({
       <div className="flex gap-2">
         <div className="w-6 h-6 rounded-full bg-[#222] flex items-center justify-center flex-shrink-0 overflow-hidden">
           {author?.avatar_url ? (
-            <Image src={author.avatar_url} alt="" width={24} height={24} className="object-cover w-full h-full" />
+            <Image
+              src={author.avatar_url}
+              alt=""
+              width={24}
+              height={24}
+              className="object-cover w-full h-full"
+            />
           ) : (
             <span className="text-[9px] text-[#888]">
               {author ? getAvatarFallback(author.display_name) : "?"}
@@ -188,7 +200,6 @@ function CommentItem({
         </div>
       </div>
 
-      {/* Replies */}
       {replies.length > 0 && (
         <div className="ml-8 border-l border-[#222] pl-3 space-y-2">
           {!showReplies && (
@@ -196,40 +207,50 @@ function CommentItem({
               onClick={() => setShowReplies(true)}
               className="text-[#4a7aa8] text-xs"
             >
-              show {replies.length} {replies.length === 1 ? "reply" : "replies"}
+              show {replies.length}{" "}
+              {replies.length === 1 ? "reply" : "replies"}
             </button>
           )}
-          {showReplies && replies.map((reply) => (
-            <motion.div
-              key={reply.id}
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex gap-2"
-            >
-              <div className="w-5 h-5 rounded-full bg-[#222] flex items-center justify-center flex-shrink-0 overflow-hidden">
-                {reply.profiles?.avatar_url ? (
-                  <Image src={reply.profiles.avatar_url} alt="" width={20} height={20} className="object-cover w-full h-full" />
-                ) : (
-                  <span className="text-[8px] text-[#888]">
-                    {reply.profiles ? getAvatarFallback(reply.profiles.display_name) : "?"}
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[#d0d0d0] text-[11px] font-medium">
-                    {reply.profiles?.display_name ?? "unknown"}
-                  </span>
-                  <span className="text-[#444] text-[10px]">
-                    {formatRelativeTime(reply.created_at)}
-                  </span>
+          {showReplies &&
+            replies.map((reply) => (
+              <motion.div
+                key={reply.id}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex gap-2"
+              >
+                <div className="w-5 h-5 rounded-full bg-[#222] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {reply.profiles?.avatar_url ? (
+                    <Image
+                      src={reply.profiles.avatar_url}
+                      alt=""
+                      width={20}
+                      height={20}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <span className="text-[8px] text-[#888]">
+                      {reply.profiles
+                        ? getAvatarFallback(reply.profiles.display_name)
+                        : "?"}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[#aaa] text-[11px] leading-relaxed mt-0.5">
-                  {reply.content}
-                </p>
-              </div>
-            </motion.div>
-          ))}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#d0d0d0] text-[11px] font-medium">
+                      {reply.profiles?.display_name ?? "unknown"}
+                    </span>
+                    <span className="text-[#444] text-[10px]">
+                      {formatRelativeTime(reply.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-[#aaa] text-[11px] leading-relaxed mt-0.5">
+                    {reply.content}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
         </div>
       )}
     </div>

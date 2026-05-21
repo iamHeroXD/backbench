@@ -379,7 +379,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["app_settings"]["Insert"]>;
       };
     };
-    Views: Record<string, never>;
+    Views: { [_ in never]: never };
     Functions: {
       is_admin_or_mod: { Args: Record<string, never>; Returns: boolean };
       is_admin: { Args: Record<string, never>; Returns: boolean };

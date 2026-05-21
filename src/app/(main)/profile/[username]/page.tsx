@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import type { Profile, PostWithAuthor } from "@/lib/types/database";
 import ProfileClient from "./ProfileClient";
 
 export default async function ProfilePage({
@@ -9,21 +10,28 @@ export default async function ProfilePage({
 }) {
   const { username } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
+  const { data: rawProfile } = await supabase
     .from("profiles")
     .select("*")
     .eq("username", username.toLowerCase())
     .single();
 
+  const profile = rawProfile as Profile | null;
   if (!profile || profile.is_banned) notFound();
 
-  const { data: currentProfile } = user ? await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", user.id)
-    .single() : { data: null };
+  let currentProfile: Profile | null = null;
+  if (user) {
+    const { data: cp } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    currentProfile = cp as Profile | null;
+  }
 
   // Follow status
   let isFollowing = false;
@@ -37,16 +45,27 @@ export default async function ProfilePage({
     isFollowing = !!follow;
   }
 
-  // Counts
   const [followersRes, followingRes, postsRes] = await Promise.all([
-    supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
-    supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", profile.id),
-    supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", profile.id).eq("is_deleted", false),
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("following_id", profile.id),
+    supabase
+      .from("follows")
+      .select("*", { count: "exact", head: true })
+      .eq("follower_id", profile.id),
+    supabase
+      .from("posts")
+      .select("*", { count: "exact", head: true })
+      .eq("author_id", profile.id)
+      .eq("is_deleted", false),
   ]);
 
-  const { data: posts } = await supabase
+  const { data: postsRaw } = await supabase
     .from("posts")
-    .select("*, profiles!author_id(id, username, display_name, avatar_url, is_shadowbanned), reactions(id, user_id, type)")
+    .select(
+      "*, profiles!author_id(id, username, display_name, avatar_url, is_shadowbanned), reactions(id, user_id, type)"
+    )
     .eq("author_id", profile.id)
     .eq("is_deleted", false)
     .order("created_at", { ascending: false })
@@ -61,7 +80,7 @@ export default async function ProfilePage({
       followerCount={followersRes.count ?? 0}
       followingCount={followingRes.count ?? 0}
       postCount={postsRes.count ?? 0}
-      initialPosts={(posts ?? []) as never}
+      initialPosts={(postsRaw ?? []) as PostWithAuthor[]}
     />
   );
 }
