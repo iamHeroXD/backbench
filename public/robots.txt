@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /admin
+Disallow: /api/
+Disallow: /feed
+Disallow: /notifications
+Disallow: /settings
+Disallow: /whispers
+Disallow: /bookmarks
+Disallow: /profile/
+Disallow: /post/
+Allow: /
+Allow: /login
