@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Plus, ChevronUp, Pin, BookOpen } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { CLASS_OPTIONS } from "@/lib/utils";
@@ -173,6 +174,9 @@ export default function TomorrowPage() {
 
   return (
     <div className="pt-2 px-3">
+      <div className="mb-3">
+        <BackButton fallback="/feed" />
+      </div>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-[#f0f0f0] font-medium text-base">tomorrow</h1>

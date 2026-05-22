@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { BarChart2 } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime } from "@/lib/utils";
 import { toast } from "sonner";
@@ -140,6 +141,7 @@ export default function PollsPage() {
 
   return (
     <div className="pt-2 px-3">
+      <div className="mb-3"><BackButton fallback="/explore" /></div>
       <div className="flex items-center gap-2 mb-4">
         <BarChart2 size={16} className="text-[#4a7aa8]" />
         <h1 className="text-[#f0f0f0] font-medium">active polls</h1>

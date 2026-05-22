@@ -107,6 +107,14 @@ export default function AdminDashboard() {
   const [newInvites, setNewInvites] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<ConfirmState>(null);
 
+  // Load real lockdown state on mount (not just when overview tab is visited)
+  useEffect(() => {
+    fetch("/api/admin?section=settings")
+      .then((r) => r.json())
+      .then((d) => setIsLocked(d.settings?.emergency_lockdown ?? false))
+      .catch(() => {});
+  }, []);
+
   const loadTab = useCallback(async (t: Tab) => {
     setLoading(true);
     try {

@@ -221,33 +221,43 @@ export default function ExplorePage() {
         <div className="space-y-2">
           <a
             href="/polls"
-            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#2a2a2a] transition-colors block"
           >
             <div>
-              <p className="text-[#d0d0d0] text-sm font-medium">active polls</p>
-              <p className="text-[#555] text-xs mt-0.5">vote on what happens next</p>
+              <p className="text-[#c8c8c8] text-sm font-medium">active polls</p>
+              <p className="text-[#444] text-xs mt-0.5">vote on what happens next</p>
             </div>
-            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+            <span className="text-[#333] text-sm">{"->"}</span>
           </a>
           <a
             href="/spotted"
-            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#2a2a2a] transition-colors block"
           >
             <div>
-              <p className="text-[#d0d0d0] text-sm font-medium">spotted</p>
-              <p className="text-[#555] text-xs mt-0.5">anonymous compliments &amp; confessions</p>
+              <p className="text-[#c8c8c8] text-sm font-medium">spotted</p>
+              <p className="text-[#444] text-xs mt-0.5">anonymous compliments &amp; confessions</p>
             </div>
-            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+            <span className="text-[#333] text-sm">{"->"}</span>
           </a>
           <a
             href="/whispers"
-            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#2a2a2a] transition-colors block"
           >
             <div>
-              <p className="text-[#d0d0d0] text-sm font-medium">whispers</p>
-              <p className="text-[#555] text-xs mt-0.5">send anonymous tips to admin</p>
+              <p className="text-[#c8c8c8] text-sm font-medium">whispers</p>
+              <p className="text-[#444] text-xs mt-0.5">send anonymous tips to admin</p>
             </div>
-            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+            <span className="text-[#333] text-sm">{"->"}</span>
+          </a>
+          <a
+            href="/community"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#2a2a2a] transition-colors block"
+          >
+            <div>
+              <p className="text-[#c8c8c8] text-sm font-medium">community</p>
+              <p className="text-[#444] text-xs mt-0.5">rules, governance, and changelog</p>
+            </div>
+            <span className="text-[#333] text-sm">{"->"}</span>
           </a>
         </div>
       </section>

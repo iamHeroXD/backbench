@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Camera, LogOut, Shield, Eye, UserPlus, Copy, Check } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -121,6 +122,9 @@ export default function SettingsPage() {
 
   return (
     <div className="pt-2 px-3 pb-6">
+      <div className="mb-2">
+        <BackButton fallback="/feed" />
+      </div>
       {/* Avatar */}
       <div className="flex flex-col items-center py-6">
         <div className="relative mb-3">

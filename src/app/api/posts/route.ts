@@ -198,48 +198,90 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
   const sort = searchParams.get("sort") ?? "for-you";
 
-  let query = supabase
-    .from("posts")
-    .select(`
-      *,
-      profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
-      reactions (id, user_id, type),
-      post_tags (tag),
-      polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
-    `)
-    .eq("is_deleted", false)
-    .order("is_pinned", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  // Common SELECT shape reused for both queries
+  const POST_SELECT = `
+    *,
+    profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
+    reactions (id, user_id, type),
+    post_tags (tag),
+    polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
+  `;
 
-  // For "latest" sort, skip pinned-first ordering and just show newest
-  if (sort === "latest") {
-    query = supabase
+  let rawPosts: unknown[] = [];
+
+  if (sort === "for-you" && !cursor) {
+    // For-you: pinned posts + followed users' recent posts first, then everything else
+    const { data: following } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+
+    const followingIds = (following ?? []).map((f: { following_id: string }) => f.following_id);
+
+    if (followingIds.length > 0) {
+      // Fetch recent posts from followed users (last 72h)
+      const threeDaysAgo = new Date(Date.now() - 72 * 3600 * 1000).toISOString();
+      const { data: followedPosts } = await supabase
+        .from("posts")
+        .select(POST_SELECT)
+        .in("author_id", followingIds)
+        .eq("is_deleted", false)
+        .gte("created_at", threeDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      // Fetch all posts (pinned first, then recent)
+      const { data: allPosts } = await supabase
+        .from("posts")
+        .select(POST_SELECT)
+        .eq("is_deleted", false)
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      // Merge: followed posts first (deduplicated), then rest
+      const followedIds = new Set((followedPosts ?? []).map((p: { id: string }) => p.id));
+      const pinnedPosts = (allPosts ?? []).filter((p: { is_pinned: boolean }) => p.is_pinned);
+      const pinnedIds = new Set(pinnedPosts.map((p: { id: string }) => p.id));
+
+      const merged = [
+        ...pinnedPosts,
+        ...(followedPosts ?? []).filter((p: { id: string }) => !pinnedIds.has(p.id)),
+        ...(allPosts ?? []).filter((p: { id: string }) => !followedIds.has(p.id) && !pinnedIds.has(p.id)),
+      ].slice(0, limit);
+
+      rawPosts = merged;
+    } else {
+      // No follows yet — show pinned first, then latest
+      const { data: posts } = await supabase
+        .from("posts")
+        .select(POST_SELECT)
+        .eq("is_deleted", false)
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      rawPosts = posts ?? [];
+    }
+  } else {
+    // "latest" sort or cursor pagination — chronological
+    let query = supabase
       .from("posts")
-      .select(`
-        *,
-        profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
-        reactions (id, user_id, type),
-        post_tags (tag),
-        polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
-      `)
+      .select(POST_SELECT)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
       .limit(limit);
+
+    if (cursor) query = query.lt("created_at", cursor);
+
+    const { data: posts, error } = await query;
+    if (error) {
+      console.error("[api/posts GET] fetch error:", error);
+      return NextResponse.json({ error: "Failed to fetch posts." }, { status: 500 });
+    }
+    rawPosts = posts ?? [];
   }
 
-  if (cursor) {
-    query = query.lt("created_at", cursor);
-  }
-
-  const { data: posts, error } = await query;
-
-  if (error) {
-    console.error("[api/posts GET] fetch error:", error);
-    return NextResponse.json({ error: "Failed to fetch posts." }, { status: 500 });
-  }
-
-  // Filter shadowbanned posts (only show to themselves or admin)
+  // Get current user's role
   const { data: currentProfile } = await supabase
     .from("profiles")
     .select("role")
@@ -248,26 +290,32 @@ export async function GET(request: NextRequest) {
 
   const isAdmin = currentProfile?.role === "admin" || currentProfile?.role === "moderator";
 
-  const filtered = (posts ?? []).filter((post) => {
-    const author = post.profiles as { is_shadowbanned: boolean; id: string } | null;
+  // Filter out shadowbanned posts for non-admins
+  const filtered = rawPosts.filter((post: unknown) => {
+    const p = post as { profiles: { is_shadowbanned: boolean; id: string } | null };
+    const author = p.profiles;
     if (!author) return false;
-    if (author.is_shadowbanned && author.id !== user.id && !isAdmin) return false;
+    const pp = post as { author_id: string };
+    if (author.is_shadowbanned && pp.author_id !== user.id && !isAdmin) return false;
     return true;
   });
 
-  // Sanitize: hide author identity for anonymous posts; strip is_shadowbanned for non-admins
-  const sanitized = filtered.map((post) => {
-    if (post.is_anonymous) return { ...post, profiles: null };
-    if (!isAdmin && post.profiles) {
+  // Sanitize: null out profiles for anonymous posts; strip is_shadowbanned for non-admins
+  const sanitized = filtered.map((post: unknown) => {
+    const p = post as { is_anonymous: boolean; profiles: Record<string, unknown> | null };
+    if (p.is_anonymous) return { ...p, profiles: null };
+    if (!isAdmin && p.profiles) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { is_shadowbanned: _sb, ...safeProfile } = post.profiles as Record<string, unknown>;
-      return { ...post, profiles: safeProfile };
+      const { is_shadowbanned: _sb, ...safeProfile } = p.profiles;
+      return { ...p, profiles: safeProfile };
     }
-    return post;
+    return p;
   });
 
-  const nextCursor = sanitized.length === limit
-    ? sanitized[sanitized.length - 1]?.created_at
+  // Cursor for pagination (only meaningful for latest sort)
+  const lastItem = sanitized.length > 0 ? (sanitized[sanitized.length - 1] as unknown as { created_at: string }) : null;
+  const nextCursor = (sort === "latest" || !!cursor) && sanitized.length === limit
+    ? (lastItem?.created_at ?? null)
     : null;
 
   return NextResponse.json({ posts: sanitized, nextCursor });

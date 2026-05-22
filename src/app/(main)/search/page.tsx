@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarFallback } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ export default function SearchPage() {
 
   return (
     <div className="pt-2 px-3">
+      <div className="mb-3"><BackButton fallback="/feed" /></div>
       {/* Search input */}
       <div className="relative mb-4">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555]" />

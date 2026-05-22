@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Settings, UserPlus, UserMinus } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarFallback, getAuraLabel, formatFullDate } from "@/lib/utils";
@@ -68,8 +69,15 @@ export default function ProfileClient({
 
   return (
     <div>
+      {/* Back button — only on other users' profiles */}
+      {!isOwn && (
+        <div className="px-4 pt-3 pb-0">
+          <BackButton fallback="/feed" />
+        </div>
+      )}
+
       {/* Profile header */}
-      <div className="px-4 pt-4 pb-2">
+      <div className="px-4 pt-3 pb-2">
         {/* Avatar + follow button */}
         <div className="flex items-start justify-between mb-4">
           <div className="w-16 h-16 rounded-full bg-[#222] overflow-hidden flex items-center justify-center">
@@ -147,6 +155,9 @@ export default function ProfileClient({
 
         <p className="text-[#333] text-xs">
           joined {formatFullDate(profile.created_at)}
+          {profile.class_name && (
+            <span className="ml-2 text-[#2a4a68]">· {profile.class_name}</span>
+          )}
         </p>
       </div>
 

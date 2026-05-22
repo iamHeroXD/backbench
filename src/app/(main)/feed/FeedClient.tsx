@@ -27,14 +27,16 @@ export default function FeedClient({ currentUser }: FeedClientProps) {
 
   const fetchPosts = useCallback(async (cursor?: string, sortTab?: "for-you" | "latest") => {
     try {
-      const sort = sortTab ?? "for-you";
-      const url = `/api/posts?limit=20${cursor ? `&cursor=${cursor}` : ""}${sort === "latest" ? "&sort=latest" : ""}`;
-      const res = await fetch(url);
+      const sort = sortTab ?? tab;
+      const params = new URLSearchParams({ limit: "20", sort });
+      if (cursor) params.set("cursor", cursor);
+      const res = await fetch(`/api/posts?${params}`);
+      if (!res.ok) return { posts: [], nextCursor: null };
       return await res.json();
     } catch {
       return { posts: [], nextCursor: null };
     }
-  }, []);
+  }, [tab]);
 
   const loadFeed = useCallback(async (sortTab: "for-you" | "latest") => {
     setLoading(true);

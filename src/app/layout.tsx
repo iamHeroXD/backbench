@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -48,16 +49,22 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans antialiased bg-[#0a0a0a] text-[#f0f0f0] min-h-screen`}
       >
+        <ErrorBoundary>
         {children}
+        </ErrorBoundary>
         <Toaster
           theme="dark"
           position="top-center"
+          richColors={false}
           toastOptions={{
+            duration: 3000,
             style: {
-              background: "#1a1a1a",
-              border: "1px solid #2a2a2a",
-              color: "#f0f0f0",
-              fontSize: "14px",
+              background: "#161616",
+              border: "1px solid #232323",
+              color: "#e8e8e8",
+              fontSize: "13px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             },
           }}
         />

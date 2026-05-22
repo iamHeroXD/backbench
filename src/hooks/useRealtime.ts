@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -11,16 +11,28 @@ interface SubscribeOptions {
   event?: RealtimeEvent | "*";
   filter?: string;
   onData: (payload: { new: unknown; old: unknown; eventType: string }) => void;
+  enabled?: boolean;
 }
 
-export function useRealtime({ table, event = "*", filter, onData }: SubscribeOptions) {
-  const supabase = createClient();
+export function useRealtime({
+  table,
+  event = "*",
+  filter,
+  onData,
+  enabled = true,
+}: SubscribeOptions) {
+  // Singleton client — stable across renders
+  const supabase = useMemo(() => createClient(), []);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // Keep onData stable in a ref so we don't recreate the channel on every render
   const onDataRef = useRef(onData);
   onDataRef.current = onData;
 
   useEffect(() => {
-    const channelName = `rt-${table}-${Math.random().toString(36).slice(2)}`;
+    if (!enabled) return;
+
+    // Use a deterministic channel name so the same subscription is reused
+    const channelName = `rt-${table}-${event}-${filter ?? "all"}`;
 
     channelRef.current = supabase
       .channel(channelName)
@@ -41,7 +53,8 @@ export function useRealtime({ table, event = "*", filter, onData }: SubscribeOpt
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
-  }, [supabase, table, event, filter]);
+  }, [supabase, table, event, filter, enabled]);
 }

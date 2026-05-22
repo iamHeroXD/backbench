@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PostCard from "@/components/feed/PostCard";
+import BackButton from "@/components/ui/BackButton";
 import type { PostWithAuthor, Profile } from "@/lib/types/database";
 
 export default async function PostPage({
@@ -49,7 +50,10 @@ export default async function PostPage({
   }
 
   return (
-    <div className="pt-4 max-w-2xl mx-auto">
+    <div className="pt-2">
+      <div className="px-4 py-2">
+        <BackButton fallback="/feed" />
+      </div>
       <PostCard
         post={post}
         currentUserId={currentUserId}

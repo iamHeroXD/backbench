@@ -1,51 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types/database";
 
 export function useAuth() {
-  const supabase = createClient();
+  // createBrowserClient returns a singleton per URL — stable reference
+  const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+    let mounted = true;
 
-      if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single();
-        setProfile(data);
-      }
-      setLoading(false);
+    async function loadProfile(userId: string) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (mounted) setProfile(data ?? null);
     }
 
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-          setProfile(data);
-        } else {
-          setProfile(null);
-        }
+    // Get initial session
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (!mounted) return;
+      setUser(u);
+      if (u) {
+        loadProfile(u.id).finally(() => { if (mounted) setLoading(false); });
+      } else {
+        setLoading(false);
       }
-    );
+    });
 
-    return () => subscription.unsubscribe();
+    // Subscribe to auth changes (token refresh, sign in/out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) {
+        loadProfile(u.id);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   async function signOut() {

@@ -3,58 +3,52 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Compass, Sun, Bookmark, User } from "lucide-react";
-import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 const navItems = [
-  { href: "/feed", icon: Home, label: "feed" },
-  { href: "/explore", icon: Compass, label: "explore" },
-  { href: "/tomorrow", icon: Sun, label: "tomorrow" },
-  { href: "/bookmarks", icon: Bookmark, label: "saved" },
+  { href: "/feed",      icon: Home,     label: "feed"     },
+  { href: "/explore",   icon: Compass,  label: "explore"  },
+  { href: "/tomorrow",  icon: Sun,      label: "tomorrow" },
+  { href: "/bookmarks", icon: Bookmark, label: "saved"    },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [username, setUsername] = useState("");
 
   useEffect(() => {
-    async function fetchUser() {
-      const { data: { user } } = await supabase.auth.getUser();
+    supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", user.id)
-        .single();
-      if (data) setUsername(data.username);
-    }
-    fetchUser();
-  }, [supabase]);
+      supabase.from("profiles").select("username").eq("id", user.id).single()
+        .then(({ data }) => { if (data) setUsername(data.username); });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const profileHref = username ? `/profile/${username}` : "/settings";
+  const isProfile = pathname.startsWith("/profile");
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-md border-t border-[#1e1e1e] bottom-nav">
-      <div className="max-w-2xl mx-auto px-2 h-14 flex items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0a0a0a]/95 backdrop-blur-sm border-t border-[#1a1a1a] bottom-nav">
+      <div className="max-w-2xl mx-auto px-1 h-14 flex items-center justify-around">
         {navItems.map(({ href, icon: Icon, label }) => {
-          const isActive = pathname === href;
+          const isActive = pathname === href || (href !== "/feed" && pathname.startsWith(href));
           return (
             <Link
               key={href}
               href={href}
-              className="relative flex flex-col items-center justify-center w-14 h-full gap-0.5"
+              className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 group"
             >
-              <div className={`relative p-1.5 rounded-xl transition-colors duration-200 ${isActive ? "text-[#f0f0f0]" : "text-[#555]"}`}>
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
-                {isActive && (
-                  <motion.div
-                    layoutId="nav-indicator"
-                    className="absolute inset-0 bg-[#1e1e1e] rounded-xl -z-10"
-                    transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
-                  />
-                )}
+              <div className={`p-1.5 rounded-md transition-colors duration-150 ${
+                isActive ? "text-[#e8e8e8] bg-[#181818]" : "text-[#444] group-hover:text-[#777]"
+              }`}>
+                <Icon size={19} strokeWidth={isActive ? 2.5 : 1.8} />
               </div>
-              <span className={`text-[9px] font-medium transition-colors duration-200 ${isActive ? "text-[#888]" : "text-[#3a3a3a]"}`}>
+              <span className={`text-[9px] font-medium transition-colors duration-150 ${
+                isActive ? "text-[#666]" : "text-[#333]"
+              }`}>
                 {label}
               </span>
             </Link>
@@ -63,20 +57,17 @@ export default function BottomNav() {
 
         {/* Profile link */}
         <Link
-          href={username ? `/profile/${username}` : "/settings"}
-          className="relative flex flex-col items-center justify-center w-14 h-full gap-0.5"
+          href={profileHref}
+          className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 group"
         >
-          <div className={`relative p-1.5 rounded-xl transition-colors duration-200 ${pathname.startsWith("/profile") ? "text-[#f0f0f0]" : "text-[#555]"}`}>
-            <User size={20} strokeWidth={pathname.startsWith("/profile") ? 2.5 : 1.8} />
-            {pathname.startsWith("/profile") && (
-              <motion.div
-                layoutId="nav-indicator"
-                className="absolute inset-0 bg-[#1e1e1e] rounded-xl -z-10"
-                transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
-              />
-            )}
+          <div className={`p-1.5 rounded-md transition-colors duration-150 ${
+            isProfile ? "text-[#e8e8e8] bg-[#181818]" : "text-[#444] group-hover:text-[#777]"
+          }`}>
+            <User size={19} strokeWidth={isProfile ? 2.5 : 1.8} />
           </div>
-          <span className={`text-[9px] font-medium transition-colors duration-200 ${pathname.startsWith("/profile") ? "text-[#888]" : "text-[#3a3a3a]"}`}>
+          <span className={`text-[9px] font-medium transition-colors duration-150 ${
+            isProfile ? "text-[#666]" : "text-[#333]"
+          }`}>
             you
           </span>
         </Link>

@@ -20,10 +20,10 @@
     --accent-foreground: 0 0% 94%;
     --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 16%;
-    --input: 0 0% 12%;
+    --border: 0 0% 13%;
+    --input: 0 0% 10%;
     --ring: 213 40% 48%;
-    --radius: 0.5rem;
+    --radius: 0.375rem;
   }
 }
 
@@ -33,129 +33,173 @@
   }
 
   html {
-    @apply bg-[#0a0a0a] text-[#f0f0f0];
+    @apply bg-[#0a0a0a] text-[#e8e8e8];
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
+    /* Smooth scroll only when user hasn't requested reduced motion */
+    scroll-behavior: auto;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
   }
 
   body {
-    @apply bg-[#0a0a0a] text-[#f0f0f0] antialiased;
+    @apply bg-[#0a0a0a] text-[#e8e8e8] antialiased;
     font-feature-settings: "cv11", "ss01";
     overscroll-behavior: none;
+    /* Better text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+  /* Prevent iOS input zoom — must be 16px minimum */
+  input, textarea, select {
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    input, textarea, select {
+      font-size: 14px;
+    }
   }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
+  /* Custom scrollbar — thin and subtle */
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #444; }
 
-  ::-webkit-scrollbar-thumb {
-    @apply bg-bb-600 rounded-full;
-  }
+  /* Text selection */
+  ::selection { background: rgba(74, 122, 168, 0.3); color: #f0f0f0; }
 
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-bb-500;
-  }
-
-  /* Selection */
-  ::selection {
-    @apply bg-bb-accent-muted text-bb-50;
-  }
-
-  /* Input autofill dark mode */
+  /* Input autofill — dark mode override */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
-    -webkit-text-fill-color: #f0f0f0;
-    -webkit-box-shadow: 0 0 0px 1000px #1a1a1a inset;
+    -webkit-text-fill-color: #e8e8e8;
+    -webkit-box-shadow: 0 0 0px 1000px #141414 inset;
     transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* Focus-visible only — removes focus ring on click but keeps it for keyboard */
+  *:focus { outline: none; }
+  *:focus-visible {
+    outline: 1px solid rgba(74, 122, 168, 0.5);
+    outline-offset: 2px;
   }
 }
 
 @layer utilities {
+  /* Main card — slightly less rounded than before, more forum-like */
   .bb-card {
-    @apply bg-[#141414] border border-[#282828] rounded-xl;
+    @apply bg-[#111] border border-[#202020] rounded-lg;
   }
 
+  /* Row-style item — for dense list layouts */
+  .bb-row {
+    @apply border-b border-[#1a1a1a] last:border-0;
+  }
+
+  /* Surface — slightly elevated from background */
   .bb-surface {
-    @apply bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg;
+    @apply bg-[#161616] border border-[#222] rounded-md;
   }
 
+  /* Input — standardized style */
   .bb-input {
-    @apply bg-[#141414] border border-[#2a2a2a] text-[#f0f0f0]
-           placeholder:text-[#555] rounded-lg px-3 py-2
-           focus:outline-none focus:border-bb-accent focus:ring-1 focus:ring-bb-accent/30
-           transition-all duration-200;
+    @apply bg-[#111] border border-[#252525] text-[#e8e8e8]
+           placeholder:text-[#444] rounded-md px-3 py-2
+           focus:outline-none focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]/20
+           transition-colors duration-150 w-full;
+    /* Important: always 16px on mobile to prevent iOS zoom */
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    .bb-input { font-size: 14px; }
   }
 
+  /* Primary button */
   .bb-button-primary {
-    @apply bg-bb-accent hover:bg-bb-accent-hover text-white
-           px-4 py-2 rounded-lg font-medium
-           transition-all duration-200 active:scale-[0.98];
+    @apply bg-[#4a7aa8] hover:bg-[#3d6d9c] active:bg-[#366291] text-white
+           px-4 py-2 rounded-md font-medium text-sm
+           transition-colors duration-150 active:scale-[0.98]
+           disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
+  /* Ghost button */
   .bb-button-ghost {
-    @apply bg-transparent hover:bg-[#1e1e1e] text-[#aaa] hover:text-[#f0f0f0]
-           px-3 py-2 rounded-lg
-           transition-all duration-200;
+    @apply bg-transparent hover:bg-[#181818] text-[#888] hover:text-[#c0c0c0]
+           px-3 py-2 rounded-md text-sm
+           transition-colors duration-150;
   }
 
+  /* Subtle button */
+  .bb-button-subtle {
+    @apply bg-[#161616] hover:bg-[#1e1e1e] border border-[#222] hover:border-[#2a2a2a]
+           text-[#888] hover:text-[#c0c0c0]
+           px-3 py-1.5 rounded-md text-xs
+           transition-colors duration-150;
+  }
+
+  /* Story ring — the gradient border around story avatars */
   .story-ring {
     background: conic-gradient(from 0deg, #4a7aa8, #6b9bc8, #4a7aa8);
     padding: 2px;
     border-radius: 9999px;
   }
 
+  /* Shimmer skeleton — loading placeholder */
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      #161616 25%,
-      #222222 50%,
-      #161616 75%
-    );
+    background: linear-gradient(90deg, #141414 25%, #1e1e1e 50%, #141414 75%);
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 0.375rem;
   }
 
-  /* Safe area for mobile */
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
+  /* Page section header */
+  .bb-section-label {
+    @apply text-[#444] text-[10px] uppercase tracking-widest font-medium;
   }
 
-  .pt-safe {
-    padding-top: env(safe-area-inset-top);
+  /* Status badge */
+  .bb-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium;
   }
+
+  /* Safe area paddings for mobile notch */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+
+  /* Scrollbar hidden */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* Framer Motion defaults */
-.motion-reduce * {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-}
-
-/* Bottom nav safe area */
+/* Bottom nav height including safe area */
 .bottom-nav {
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
 
 /* Feed post entry animation */
 @keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.post-appear {
+  animation: fadeSlideIn 0.2s ease-out;
 }
 
-.post-appear {
-  animation: fadeSlideIn 0.25s ease-out;
+/* Shimmer animation */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; background: #161616; }
+  .post-appear { animation: none; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

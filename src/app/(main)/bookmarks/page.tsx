@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Bookmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import BackButton from "@/components/ui/BackButton";
 import PostCard from "@/components/feed/PostCard";
 import type { PostWithAuthor } from "@/lib/types/database";
 
@@ -29,25 +30,35 @@ export default function BookmarksPage() {
       .single();
     setIsAdmin(["admin", "moderator"].includes((profileData as { role?: string } | null)?.role ?? ""));
 
-    const { data: bookmarks } = await supabase
+    // Fetch bookmarks then separately fetch each post — avoids Supabase nested join issues
+    const { data: bookmarkRows } = await supabase
       .from("bookmarks")
-      .select(`
-        created_at,
-        posts (
-          *,
-          profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
-          reactions (id, user_id, type),
-          post_tags (tag)
-        )
-      `)
+      .select("post_id, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (bookmarks) {
-      const extracted = bookmarks
-        .map((b) => (b.posts as unknown) as PostWithAuthor | null)
-        .filter((p): p is PostWithAuthor => p !== null && !p.is_deleted);
-      setPosts(extracted);
+    if (!bookmarkRows || bookmarkRows.length === 0) { setLoading(false); return; }
+
+    const postIds = bookmarkRows.map((b) => b.post_id);
+    const { data: postsData } = await supabase
+      .from("posts")
+      .select(`
+        *,
+        profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
+        reactions (id, user_id, type),
+        post_tags (tag)
+      `)
+      .in("id", postIds)
+      .eq("is_deleted", false);
+
+    if (postsData) {
+      // Preserve bookmark order
+      const postMap = new Map((postsData as PostWithAuthor[]).map((p) => [p.id, p]));
+      const ordered = postIds
+        .map((id) => postMap.get(id))
+        .filter((p): p is PostWithAuthor => p !== undefined);
+      // Anonymize anonymous posts
+      setPosts(ordered.map((p) => p.is_anonymous ? { ...p, profiles: null } : p));
     }
 
     setLoading(false);
@@ -63,9 +74,12 @@ export default function BookmarksPage() {
 
   return (
     <div className="pt-2">
-      <div className="flex items-center gap-2 px-4 mb-4">
-        <Bookmark size={16} className="text-[#4a7aa8]" />
-        <h1 className="text-[#f0f0f0] font-medium">saved posts</h1>
+      <div className="px-4 py-2 mb-1 flex items-center gap-3">
+        <BackButton fallback="/feed" />
+        <div className="flex items-center gap-2">
+          <Bookmark size={14} className="text-[#555]" />
+          <span className="text-[#888] text-sm">saved posts</span>
+        </div>
       </div>
 
       {loading ? (

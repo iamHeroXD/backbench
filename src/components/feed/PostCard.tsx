@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,13 +25,16 @@ interface PostCardProps {
 export default function PostCard({ post, currentUserId, isAdmin, onDelete }: PostCardProps) {
   const supabase = createClient();
   const [showComments, setShowComments] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const viewedRef = useRef(false);
 
-  // Increment view count on mount (fire and forget)
+  // Increment view count once per post instance (not on every re-render)
   useEffect(() => {
+    if (viewedRef.current) return;
+    viewedRef.current = true;
     void supabase.rpc("increment_post_views" as never, { post_id: post.id });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id]);
-  const [showMenu, setShowMenu] = useState(false);
+  }, []);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isPinned, setIsPinned] = useState(post.is_pinned);
 
