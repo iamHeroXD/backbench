@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,12 @@ interface PostCardProps {
 export default function PostCard({ post, currentUserId, isAdmin, onDelete }: PostCardProps) {
   const supabase = createClient();
   const [showComments, setShowComments] = useState(false);
+
+  // Increment view count on mount (fire and forget)
+  useEffect(() => {
+    void supabase.rpc("increment_post_views" as never, { post_id: post.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
   const [showMenu, setShowMenu] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isPinned, setIsPinned] = useState(post.is_pinned);
@@ -69,11 +75,18 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
   async function handleDelete() {
     if (!confirm("Delete this post?")) return;
     try {
-      const res = await fetch(`/api/admin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete_post", postId: post.id }),
-      });
+      let res: Response;
+      if (isOwn && !isAdmin) {
+        // Regular user deleting their own post
+        res = await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+      } else {
+        // Admin/mod deleting any post
+        res = await fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_post", postId: post.id }),
+        });
+      }
       if (!res.ok) throw new Error();
       onDelete?.(post.id);
       toast.success("Post deleted.");
@@ -100,7 +113,7 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
   }
 
   async function handleShare() {
-    const url = `${window.location.origin}/feed`;
+    const url = `${window.location.origin}/post/${post.id}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "Backbench post", url });
@@ -233,6 +246,21 @@ export default function PostCard({ post, currentUserId, isAdmin, onDelete }: Pos
           <p className="text-[#d0d0d0] text-sm leading-relaxed whitespace-pre-wrap break-words">
             {post.content}
           </p>
+        </div>
+      )}
+
+      {/* Tags */}
+      {post.post_tags && post.post_tags.length > 0 && (
+        <div className="px-4 pb-2 flex flex-wrap gap-1">
+          {post.post_tags.map(({ tag }) => (
+            <Link
+              key={tag}
+              href={`/search?q=${encodeURIComponent("#" + tag)}`}
+              className="text-[10px] px-2 py-0.5 bg-[#1a2f44] text-[#4a7aa8] rounded-full hover:bg-[#1a3f58] transition-colors"
+            >
+              #{tag}
+            </Link>
+          ))}
         </div>
       )}
 

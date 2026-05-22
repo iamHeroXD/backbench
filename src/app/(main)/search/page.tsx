@@ -44,7 +44,7 @@ export default function SearchPage() {
           .limit(8),
         supabase
           .from("posts")
-          .select("id, content, profiles!author_id(display_name)")
+          .select("id, content, is_anonymous, profiles!author_id(display_name)")
           .ilike("content", `%${q}%`)
           .eq("is_deleted", false)
           .limit(5),
@@ -52,10 +52,10 @@ export default function SearchPage() {
 
       setResults({
         users: usersRes.data ?? [],
-        posts: (postsRes.data ?? []).map((p) => ({
+        posts: ((postsRes.data ?? []) as unknown as { id: string; content: string | null; is_anonymous: boolean; profiles: { display_name: string } | null }[]).map((p) => ({
           id: p.id,
-          content: p.content?.slice(0, 100) ?? "",
-          author: ((p.profiles as unknown) as { display_name: string } | null)?.display_name ?? "unknown",
+          content: p.is_anonymous ? "[anonymous post]" : p.content?.slice(0, 100) ?? "",
+          author: p.is_anonymous ? "anonymous" : p.profiles?.display_name ?? "unknown",
         })),
       });
       setLoading(false);
@@ -140,10 +140,10 @@ export default function SearchPage() {
                 <p className="text-[#555] text-xs uppercase tracking-wider mb-2">posts</p>
                 <div className="space-y-1">
                   {results.posts.map((post) => (
-                    <div key={post.id} className="bb-card px-4 py-3">
+                    <a key={post.id} href={`/post/${post.id}`} className="bb-card px-4 py-3 block hover:border-[#333] transition-colors">
                       <p className="text-[#d0d0d0] text-sm truncate">{post.content}</p>
                       <p className="text-[#555] text-xs mt-1">by {post.author}</p>
-                    </div>
+                    </a>
                   ))}
                 </div>
               </div>

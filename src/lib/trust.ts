@@ -29,41 +29,20 @@ export async function adjustTrustScore(
     reason,
   });
 
-  await supabase.rpc("adjust_trust_score" as never, {
-    p_user_id: userId,
-    p_delta: delta,
-  });
-
-  // Fallback: direct update
   const { data: profile } = await supabase
     .from("profiles")
     .select("trust_score")
     .eq("id", userId)
     .single();
 
-  if (profile) {
-    const newScore = Math.max(0, Math.min(100, profile.trust_score + delta));
-    await supabase
-      .from("profiles")
-      .update({ trust_score: newScore })
-      .eq("id", userId);
+  if (!profile) return;
 
-    // Auto-flag if trust drops below threshold
-    if (newScore < 20) {
-      await supabase
-        .from("profiles")
-        .update({ is_suspicious: true })
-        .eq("id", userId);
-    }
+  const newScore = Math.max(0, Math.min(100, profile.trust_score + delta));
+  const updates: Record<string, unknown> = { trust_score: newScore };
+  if (newScore < 20) updates.is_suspicious = true;
+  if (newScore < 30) updates.can_invite = false;
 
-    // Auto-restrict invites for low trust
-    if (newScore < 30) {
-      await supabase
-        .from("profiles")
-        .update({ can_invite: false })
-        .eq("id", userId);
-    }
-  }
+  await supabase.from("profiles").update(updates).eq("id", userId);
 }
 
 export async function detectSuspiciousActivity(userId: string): Promise<boolean> {

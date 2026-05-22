@@ -51,7 +51,7 @@ export async function POST(
     type,
   });
 
-  // Notify post author (not self)
+  // Notify post author (not self), deduplicated within 5 minutes
   const { data: post } = await supabase
     .from("posts")
     .select("author_id")
@@ -59,12 +59,24 @@ export async function POST(
     .single();
 
   if (post && post.author_id !== user.id) {
-    await supabase.from("notifications").insert({
-      user_id: post.author_id,
-      actor_id: user.id,
-      type: "reaction",
-      post_id: postId,
-    });
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { count: existingNotif } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", post.author_id)
+      .eq("actor_id", user.id)
+      .eq("type", "reaction")
+      .eq("post_id", postId)
+      .gte("created_at", fiveMinAgo);
+
+    if ((existingNotif ?? 0) === 0) {
+      await supabase.from("notifications").insert({
+        user_id: post.author_id,
+        actor_id: user.id,
+        type: "reaction",
+        post_id: postId,
+      });
+    }
   }
 
   return NextResponse.json({ action: "added" });

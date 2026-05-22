@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Camera, LogOut, Shield, Eye } from "lucide-react";
+import { Camera, LogOut, Shield, Eye, UserPlus, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +23,9 @@ export default function SettingsPage() {
   const [className, setClassName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -75,6 +78,29 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function generateInvite() {
+    if (generatingInvite) return;
+    setGeneratingInvite(true);
+    try {
+      const res = await fetch("/api/invites", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Failed to generate invite."); return; }
+      setGeneratedCodes((prev) => [data.code, ...prev]);
+      setProfile((p) => p ? { ...p, invite_slots: Math.max(0, (p.invite_slots ?? 1) - 1) } : p);
+      toast.success("Invite code generated!");
+    } catch {
+      toast.error("Failed to generate invite.");
+    } finally {
+      setGeneratingInvite(false);
+    }
+  }
+
+  async function copyCode(code: string) {
+    await navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
   }
 
   async function signOut() {
@@ -202,6 +228,52 @@ export default function SettingsPage() {
           </div>
           <span className="text-[#888] text-sm">{profile?.invite_slots}</span>
         </div>
+
+        {/* Invite generation */}
+        {profile?.can_invite && (
+          <div className="bb-card px-4 py-4">
+            <div className="flex items-center gap-2.5 mb-3">
+              <UserPlus size={15} className="text-[#555]" />
+              <div>
+                <p className="text-[#d0d0d0] text-sm">invite a classmate</p>
+                <p className="text-[#555] text-xs">{profile.invite_slots} slot{profile.invite_slots !== 1 ? "s" : ""} remaining</p>
+              </div>
+            </div>
+
+            {(profile.invite_slots ?? 0) > 0 ? (
+              <button
+                onClick={generateInvite}
+                disabled={generatingInvite}
+                className="w-full py-2 bg-[#1a2f44] border border-[#2a4a68] text-[#4a7aa8] text-sm rounded-lg
+                           hover:bg-[#1a3f58] transition-colors disabled:opacity-50"
+              >
+                {generatingInvite ? "generating..." : "generate invite code"}
+              </button>
+            ) : (
+              <p className="text-[#444] text-xs">no invite slots remaining.</p>
+            )}
+
+            {generatedCodes.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[#444] text-[10px] uppercase tracking-wider">generated codes</p>
+                {generatedCodes.map((code) => (
+                  <button
+                    key={code}
+                    onClick={() => copyCode(code)}
+                    className="flex items-center justify-between w-full px-3 py-2 bg-[#111] border border-[#1e1e1e] rounded-lg hover:border-[#2a2a2a] transition-colors"
+                  >
+                    <span className="text-[#4a7aa8] font-mono text-sm tracking-widest">{code}</span>
+                    {copiedCode === code ? (
+                      <Check size={13} className="text-green-400" />
+                    ) : (
+                      <Copy size={13} className="text-[#555]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Danger zone */}

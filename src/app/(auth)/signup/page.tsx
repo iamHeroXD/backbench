@@ -11,6 +11,7 @@ import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { CLASS_OPTIONS } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -84,6 +85,10 @@ function SignupForm() {
         toast.error(data.error ?? "Signup failed.");
         return;
       }
+
+      // Create browser session — the API creates the user server-side but doesn't set cookies
+      const supabase = createClient();
+      await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
 
       toast.success("Welcome to Backbench.");
       router.push("/onboarding");

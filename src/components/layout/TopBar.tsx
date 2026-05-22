@@ -17,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/spotted": "spotted",
   "/polls": "polls",
   "/whispers": "whispers",
+  "/bookmarks": "saved",
 };
 
 export default function TopBar() {
@@ -26,7 +27,10 @@ export default function TopBar() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const isFeed = pathname === "/feed";
-  const title = PAGE_TITLES[pathname] ?? "backbench";
+  const title = PAGE_TITLES[pathname]
+    ?? (pathname.startsWith("/post/") ? "post" : null)
+    ?? (pathname.startsWith("/profile/") ? "profile" : null)
+    ?? "backbench";
 
   useEffect(() => {
     async function fetchUnread() {

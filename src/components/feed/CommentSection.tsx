@@ -76,11 +76,19 @@ export default function CommentSection({
   async function deleteComment(commentId: string) {
     if (!confirm("Delete this comment?")) return;
     try {
-      const res = await fetch("/api/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete_comment", commentId }),
-      });
+      const comment = comments.find((c) => c.id === commentId);
+      const isOwnComment = comment?.profiles?.id === currentUserId;
+
+      let res: Response;
+      if (isOwnComment && !isAdmin) {
+        res = await fetch(`/api/posts/${postId}/comments/${commentId}`, { method: "DELETE" });
+      } else {
+        res = await fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete_comment", commentId }),
+        });
+      }
       if (!res.ok) throw new Error();
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       toast.success("Comment deleted.");

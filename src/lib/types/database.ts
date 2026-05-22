@@ -411,8 +411,9 @@ export type SpottedPost = Database["public"]["Tables"]["spotted_posts"]["Row"];
 
 // Enriched types with joins
 export type PostWithAuthor = Post & {
-  profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "is_shadowbanned">;
+  profiles: Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "is_shadowbanned" | "class_name"> | null;
   reactions: Reaction[];
+  post_tags?: { tag: string }[];
   _count?: { comments: number };
 };
 

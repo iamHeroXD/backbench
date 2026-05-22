@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types/database";
 import BottomNav from "@/components/layout/BottomNav";
 import TopBar from "@/components/layout/TopBar";
@@ -39,8 +39,24 @@ export default async function MainLayout({
   const profile = rawProfile as Pick<Profile, "id" | "role" | "is_banned"> | null;
 
   if (profile?.is_banned) {
-    redirect("/login?banned=1");
+    // Check if a temporary ban has expired before rejecting
+    const serviceClient = await createServiceClient();
+    const { data: banExpired } = await serviceClient.rpc("auto_expire_bans" as never, { p_user_id: user.id });
+    if (banExpired) {
+      // Re-fetch profile after auto-expiry
+      const { data: refreshed } = await supabase.from("profiles").select("id, role, is_banned").eq("id", user.id).single();
+      if (refreshed?.is_banned) {
+        redirect("/login?banned=1");
+      }
+      // else: ban was expired, allow through — update profile variable
+      (profile as { is_banned: boolean }).is_banned = false;
+    } else {
+      redirect("/login?banned=1");
+    }
   }
+
+  // Update last_active_at (fire and forget)
+  supabase.from("profiles").update({ last_active_at: new Date().toISOString() }).eq("id", user.id).then(() => {});
 
   if (settings?.emergency_lockdown && profile?.role !== "admin") {
     return (

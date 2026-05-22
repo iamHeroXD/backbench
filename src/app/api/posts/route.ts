@@ -6,7 +6,10 @@ import { z } from "zod";
 const createPostSchema = z.object({
   type: z.enum(["text", "image", "poll"]),
   content: z.string().min(1).max(2000).optional(),
-  imageUrl: z.string().url().optional(),
+  imageUrl: z.string().url().refine(
+    (url) => { try { return new URL(url).hostname.endsWith(".supabase.co"); } catch { return false; } },
+    { message: "Image must be from Backbench storage." }
+  ).optional(),
   isAnonymous: z.boolean().default(false),
   tags: z.array(z.string()).optional(),
   // For polls
@@ -98,7 +101,28 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (postError || !post) {
+    console.error("[api/posts POST] insert error:", postError);
     return NextResponse.json({ error: "Failed to create post." }, { status: 500 });
+  }
+
+  // Detect @mentions and create notifications
+  if (content) {
+    const mentionRegex = /@([a-z0-9_]+)/gi;
+    const mentionedUsernames = [...content.matchAll(mentionRegex)].map((m) => m[1]);
+    if (mentionedUsernames.length > 0) {
+      const { data: mentionedProfiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("username", mentionedUsernames.slice(0, 5));
+      if (mentionedProfiles) {
+        const mentionNotifs = mentionedProfiles
+          .filter((p) => p.id !== user.id)
+          .map((p) => ({ user_id: p.id, actor_id: user.id, type: "mention" as const, post_id: post.id }));
+        if (mentionNotifs.length > 0) {
+          await supabase.from("notifications").insert(mentionNotifs);
+        }
+      }
+    }
   }
 
   // Add tags
@@ -147,6 +171,20 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id);
   }
 
+  // Award first_post achievement
+  const { count: postCount } = await supabase
+    .from("posts")
+    .select("*", { count: "exact", head: true })
+    .eq("author_id", user.id)
+    .eq("is_deleted", false);
+
+  if ((postCount ?? 0) === 1) {
+    await supabase.from("achievements").upsert(
+      { user_id: user.id, type: "first_post" },
+      { onConflict: "user_id,type", ignoreDuplicates: true }
+    );
+  }
+
   return NextResponse.json({ success: true, post });
 }
 
@@ -166,6 +204,7 @@ export async function GET(request: NextRequest) {
       *,
       profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
       reactions (id, user_id, type),
+      post_tags (tag),
       polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
     `)
     .eq("is_deleted", false)
@@ -181,6 +220,7 @@ export async function GET(request: NextRequest) {
         *,
         profiles!author_id (id, username, display_name, avatar_url, is_shadowbanned, class_name),
         reactions (id, user_id, type),
+        post_tags (tag),
         polls (id, question, expires_at, anonymous_votes, poll_options (id, text, position, poll_votes(count)))
       `)
       .eq("is_deleted", false)
@@ -195,6 +235,7 @@ export async function GET(request: NextRequest) {
   const { data: posts, error } = await query;
 
   if (error) {
+    console.error("[api/posts GET] fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch posts." }, { status: 500 });
   }
 
@@ -214,9 +255,20 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  const nextCursor = filtered.length === limit
-    ? filtered[filtered.length - 1]?.created_at
+  // Sanitize: hide author identity for anonymous posts; strip is_shadowbanned for non-admins
+  const sanitized = filtered.map((post) => {
+    if (post.is_anonymous) return { ...post, profiles: null };
+    if (!isAdmin && post.profiles) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { is_shadowbanned: _sb, ...safeProfile } = post.profiles as Record<string, unknown>;
+      return { ...post, profiles: safeProfile };
+    }
+    return post;
+  });
+
+  const nextCursor = sanitized.length === limit
+    ? sanitized[sanitized.length - 1]?.created_at
     : null;
 
-  return NextResponse.json({ posts: filtered, nextCursor });
+  return NextResponse.json({ posts: sanitized, nextCursor });
 }

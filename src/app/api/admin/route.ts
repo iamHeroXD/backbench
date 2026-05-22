@@ -41,6 +41,15 @@ export async function POST(request: NextRequest) {
 
   switch (data.action) {
     case "ban": {
+      // Role hierarchy: cannot ban admins; moderators cannot ban moderators
+      const { data: targetProfile } = await supabase.from("profiles").select("role").eq("id", data.userId).single();
+      if (targetProfile?.role === "admin") {
+        return NextResponse.json({ error: "Cannot moderate admin accounts." }, { status: 403 });
+      }
+      if (mod.role === "moderator" && targetProfile?.role === "moderator") {
+        return NextResponse.json({ error: "Moderators cannot moderate each other." }, { status: 403 });
+      }
+
       await supabase.from("profiles").update({
         is_banned: data.type !== "shadowban",
         is_shadowbanned: data.type === "shadowban",
@@ -177,17 +186,14 @@ export async function GET(request: NextRequest) {
   const section = searchParams.get("section") ?? "stats";
 
   if (section === "stats") {
-    const [users, posts, reports, whispers] = await Promise.all([
+    const [users, posts, reports, whispers, suspicious, settings] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }),
       supabase.from("posts").select("*", { count: "exact", head: true }).eq("is_deleted", false),
       supabase.from("reports").select("*", { count: "exact", head: true }).eq("is_resolved", false),
       supabase.from("whispers").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("is_suspicious", true),
+      supabase.from("app_settings").select("emergency_lockdown, lockdown_message").single(),
     ]);
-
-    const suspicious = await supabase
-      .from("profiles")
-      .select("*", { count: "exact", head: true })
-      .eq("is_suspicious", true);
 
     return NextResponse.json({
       stats: {
@@ -196,8 +202,25 @@ export async function GET(request: NextRequest) {
         pendingReports: reports.count ?? 0,
         pendingWhispers: whispers.count ?? 0,
         suspiciousAccounts: suspicious.count ?? 0,
+        isLocked: (settings.data as { emergency_lockdown?: boolean } | null)?.emergency_lockdown ?? false,
+        lockdownMessage: (settings.data as { lockdown_message?: string | null } | null)?.lockdown_message ?? "",
       },
     });
+  }
+
+  if (section === "settings") {
+    const { data } = await supabase.from("app_settings").select("emergency_lockdown, lockdown_message, maintenance_mode").single();
+    return NextResponse.json({ settings: data });
+  }
+
+  if (section === "spotted") {
+    const { data } = await supabase
+      .from("spotted_posts")
+      .select("id, content, created_at, is_approved, is_deleted")
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    return NextResponse.json({ spotted: data ?? [] });
   }
 
   if (section === "users") {

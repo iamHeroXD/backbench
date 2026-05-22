@@ -118,42 +118,43 @@ export default function TomorrowPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    const isUp = upvoted.has(itemId);
-    if (isUp) {
-      await supabase
-        .from("tomorrow_upvotes")
-        .delete()
-        .eq("item_id", itemId)
-        .eq("user_id", user.id);
-      const current = items.find((i) => i.id === itemId)?.upvotes ?? 1;
-      await supabase
-        .from("tomorrow_items")
-        .update({ upvotes: Math.max(0, current - 1) })
-        .eq("id", itemId);
+    const isNowUpvoted = !upvoted.has(itemId);
+
+    // Optimistic UI update
+    setUpvoted((s) => {
+      const n = new Set(s);
+      if (isNowUpvoted) { n.add(itemId); } else { n.delete(itemId); }
+      return n;
+    });
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId
+          ? { ...i, upvotes: isNowUpvoted ? i.upvotes + 1 : Math.max(0, i.upvotes - 1) }
+          : i
+      )
+    );
+
+    // Atomic server-side toggle
+    const { data: newCount, error } = await supabase.rpc(
+      "toggle_tomorrow_upvote" as never,
+      { p_item_id: itemId, p_user_id: user.id }
+    );
+
+    if (error) {
+      // Revert on error
       setUpvoted((s) => {
         const n = new Set(s);
-        n.delete(itemId);
+        if (isNowUpvoted) { n.delete(itemId); } else { n.add(itemId); }
         return n;
       });
+      await fetchItems();
+      return;
+    }
+
+    // Sync with server count
+    if (typeof newCount === "number") {
       setItems((prev) =>
-        prev.map((i) =>
-          i.id === itemId ? { ...i, upvotes: Math.max(0, i.upvotes - 1) } : i
-        )
-      );
-    } else {
-      await supabase
-        .from("tomorrow_upvotes")
-        .insert({ item_id: itemId, user_id: user.id });
-      const current = items.find((i) => i.id === itemId)?.upvotes ?? 0;
-      await supabase
-        .from("tomorrow_items")
-        .update({ upvotes: current + 1 })
-        .eq("id", itemId);
-      setUpvoted((s) => new Set([...s, itemId]));
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === itemId ? { ...i, upvotes: i.upvotes + 1 } : i
-        )
+        prev.map((i) => (i.id === itemId ? { ...i, upvotes: newCount } : i))
       );
     }
   }

@@ -3,13 +3,14 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Users, FileText, Flag, Radio, AlertTriangle, Key,
-  Shield, CheckCircle, Lock, Unlock, ScrollText, VolumeX, Volume2,
+  Shield, CheckCircle, Lock, Unlock, ScrollText, VolumeX, Volume2, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatRelativeTime } from "@/lib/utils";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 
 type Stats = {
   totalUsers: number;
@@ -17,6 +18,7 @@ type Stats = {
   pendingReports: number;
   pendingWhispers: number;
   suspiciousAccounts: number;
+  isLocked: boolean;
 };
 
 type User = {
@@ -69,7 +71,16 @@ type ModLog = {
   profiles: { username: string } | null;
 };
 
-type Tab = "overview" | "users" | "reports" | "whispers" | "invites" | "logs";
+type SpottedPost = {
+  id: string;
+  content: string;
+  created_at: string;
+  is_approved: boolean;
+};
+
+type Tab = "overview" | "users" | "reports" | "whispers" | "spotted" | "invites" | "logs";
+
+type ConfirmState = { title: string; description: string; fn: () => void } | null;
 
 async function adminAction(action: object) {
   const res = await fetch("/api/admin", {
@@ -87,12 +98,14 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [whispers, setWhispers] = useState<Whisper[]>([]);
+  const [spotted, setSpotted] = useState<SpottedPost[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [logs, setLogs] = useState<ModLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [inviteCount, setInviteCount] = useState(5);
   const [newInvites, setNewInvites] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   const loadTab = useCallback(async (t: Tab) => {
     setLoading(true);
@@ -101,6 +114,7 @@ export default function AdminDashboard() {
         const res = await fetch("/api/admin?section=stats");
         const d = await res.json();
         setStats(d.stats);
+        setIsLocked(d.stats?.isLocked ?? false);
       } else if (t === "users") {
         const res = await fetch("/api/admin?section=users");
         const d = await res.json();
@@ -113,6 +127,10 @@ export default function AdminDashboard() {
         const res = await fetch("/api/whispers");
         const d = await res.json();
         setWhispers(d.whispers ?? []);
+      } else if (t === "spotted") {
+        const res = await fetch("/api/admin?section=spotted");
+        const d = await res.json();
+        setSpotted(d.spotted ?? []);
       } else if (t === "invites") {
         const res = await fetch("/api/admin?section=invites");
         const d = await res.json();
@@ -145,18 +163,30 @@ export default function AdminDashboard() {
     }
   }
 
-  async function banUser(userId: string, type: "temporary" | "permanent" | "shadowban") {
-    try {
-      await adminAction({ action: "ban", userId, type, reason: "Admin action" });
-      toast.success(`User ${type === "shadowban" ? "shadowbanned" : "banned"}.`);
-      setUsers((prev) => prev.map((u) => u.id === userId ? {
-        ...u,
-        is_banned: type !== "shadowban",
-        is_shadowbanned: type === "shadowban",
-      } : u));
-    } catch {
-      toast.error("Action failed.");
-    }
+  function confirmBan(userId: string, type: "temporary" | "permanent" | "shadowban") {
+    const reason = window.prompt(`Ban reason for ${type} ban:`);
+    if (reason === null) return; // cancelled
+    const banReason = reason.trim() || "Admin action";
+
+    const label = type === "shadowban" ? "shadowban" : type + " ban";
+    setConfirm({
+      title: `Confirm ${label}`,
+      description: `This will ${label} the user. Reason: "${banReason}"`,
+      fn: async () => {
+        setConfirm(null);
+        try {
+          await adminAction({ action: "ban", userId, type, reason: banReason });
+          toast.success(`User ${type === "shadowban" ? "shadowbanned" : "banned"}.`);
+          setUsers((prev) => prev.map((u) => u.id === userId ? {
+            ...u,
+            is_banned: type !== "shadowban",
+            is_shadowbanned: type === "shadowban",
+          } : u));
+        } catch {
+          toast.error("Action failed.");
+        }
+      },
+    });
   }
 
   async function unbanUser(userId: string) {
@@ -179,14 +209,23 @@ export default function AdminDashboard() {
     }
   }
 
-  async function toggleLockdown() {
-    try {
-      await adminAction({ action: "lockdown", enabled: !isLocked });
-      setIsLocked(!isLocked);
-      toast.success(isLocked ? "Lockdown lifted." : "Lockdown activated.");
-    } catch {
-      toast.error("Action failed.");
-    }
+  function confirmLockdown() {
+    setConfirm({
+      title: isLocked ? "Lift lockdown?" : "Activate emergency lockdown?",
+      description: isLocked
+        ? "This will restore normal access for all students."
+        : "This will block all non-admin users from accessing Backbench.",
+      fn: async () => {
+        setConfirm(null);
+        try {
+          await adminAction({ action: "lockdown", enabled: !isLocked });
+          setIsLocked(!isLocked);
+          toast.success(isLocked ? "Lockdown lifted." : "Lockdown activated.");
+        } catch {
+          toast.error("Action failed.");
+        }
+      },
+    });
   }
 
   async function resolveReport(reportId: string) {
@@ -209,17 +248,49 @@ export default function AdminDashboard() {
     }
   }
 
+  async function approveSpotted(spotId: string) {
+    try {
+      await adminAction({ action: "approve_spotted", spotId });
+      setSpotted((prev) => prev.map((s) => s.id === spotId ? { ...s, is_approved: true } : s));
+      toast.success("Spotted post approved.");
+    } catch {
+      toast.error("Action failed.");
+    }
+  }
+
+  async function rejectSpotted(spotId: string) {
+    try {
+      await adminAction({ action: "reject_spotted", spotId });
+      setSpotted((prev) => prev.filter((s) => s.id !== spotId));
+      toast.success("Spotted post rejected.");
+    } catch {
+      toast.error("Action failed.");
+    }
+  }
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "overview", icon: <Shield size={13} /> },
     { id: "users", label: "users", icon: <Users size={13} /> },
     { id: "reports", label: "reports", icon: <Flag size={13} /> },
     { id: "whispers", label: "whispers", icon: <Radio size={13} /> },
+    { id: "spotted", label: "spotted", icon: <Sparkles size={13} /> },
     { id: "invites", label: "invites", icon: <Key size={13} /> },
     { id: "logs", label: "logs", icon: <ScrollText size={13} /> },
   ];
 
   return (
     <div>
+      <AnimatePresence>
+        {confirm && (
+          <ConfirmModal
+            title={confirm.title}
+            description={confirm.description}
+            onConfirm={confirm.fn}
+            onCancel={() => setConfirm(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Tabs */}
       <div className="flex items-center gap-1 flex-wrap mb-6">
         {tabs.map((t) => (
@@ -242,7 +313,7 @@ export default function AdminDashboard() {
 
         {/* Emergency lockdown */}
         <button
-          onClick={toggleLockdown}
+          onClick={confirmLockdown}
           className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors
             ${isLocked
               ? "border-red-500/40 text-red-400 bg-red-500/10"
@@ -351,13 +422,13 @@ export default function AdminDashboard() {
                       ) : (
                         <>
                           <button
-                            onClick={() => banUser(user.id, "shadowban")}
+                            onClick={() => confirmBan(user.id, "shadowban")}
                             className="px-2 py-1 text-[10px] bg-[#1e1e1e] border border-[#2a2a2a] text-[#777] rounded-lg hover:border-orange-500/30 hover:text-orange-400/70 transition-colors"
                           >
                             shadow
                           </button>
                           <button
-                            onClick={() => banUser(user.id, "permanent")}
+                            onClick={() => confirmBan(user.id, "permanent")}
                             className="px-2 py-1 text-[10px] bg-[#1e1e1e] border border-[#2a2a2a] text-[#777] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
                           >
                             ban
@@ -452,6 +523,49 @@ export default function AdminDashboard() {
                               className="px-2 py-1 bg-[#1e1e1e] text-[#555] text-xs rounded-lg hover:text-[#888] transition-colors"
                             >
                               dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* SPOTTED */}
+          {tab === "spotted" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {spotted.length === 0 ? (
+                <div className="text-center py-12">
+                  <Sparkles size={28} className="text-[#333] mx-auto mb-3" />
+                  <p className="text-[#444] text-sm">no spotted posts pending</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {spotted.map((s) => (
+                    <div key={s.id} className={`bb-card px-4 py-4 ${!s.is_approved ? "border-[#2a4a68]" : "border-green-500/10"}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="text-[#d0d0d0] text-sm leading-relaxed">{s.content}</p>
+                          <p className="text-[#444] text-xs mt-1.5">
+                            {formatRelativeTime(s.created_at)} · {s.is_approved ? "approved" : "pending"}
+                          </p>
+                        </div>
+                        {!s.is_approved && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => approveSpotted(s.id)}
+                              className="px-2 py-1 bg-green-500/10 border border-green-500/20 text-green-400 text-xs rounded-lg hover:bg-green-500/20 transition-colors"
+                            >
+                              approve
+                            </button>
+                            <button
+                              onClick={() => rejectSpotted(s.id)}
+                              className="px-2 py-1 bg-[#1e1e1e] text-[#555] text-xs rounded-lg hover:text-red-400 transition-colors"
+                            >
+                              reject
                             </button>
                           </div>
                         )}

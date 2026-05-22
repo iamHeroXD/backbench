@@ -23,24 +23,24 @@ export async function POST(request: NextRequest) {
 
   // Prevent duplicate reports in 24h
   const dayAgo = new Date(Date.now() - 86400000).toISOString();
-  const existing = await supabase
-    .from("reports")
-    .select("id")
-    .eq("reporter_id", user.id)
-    .eq("is_resolved", false)
-    .gte("created_at", dayAgo)
-    .or(
-      [
-        reportedUser ? `reported_user.eq.${reportedUser}` : "",
-        postId ? `post_id.eq.${postId}` : "",
-        commentId ? `comment_id.eq.${commentId}` : "",
-      ]
-        .filter(Boolean)
-        .join(",")
-    );
+  const conditions = [
+    reportedUser ? `reported_user.eq.${reportedUser}` : "",
+    postId ? `post_id.eq.${postId}` : "",
+    commentId ? `comment_id.eq.${commentId}` : "",
+  ].filter(Boolean);
 
-  if ((existing.data?.length ?? 0) > 0) {
-    return NextResponse.json({ success: true, message: "Already reported." });
+  if (conditions.length > 0) {
+    const existing = await supabase
+      .from("reports")
+      .select("id")
+      .eq("reporter_id", user.id)
+      .eq("is_resolved", false)
+      .gte("created_at", dayAgo)
+      .or(conditions.join(","));
+
+    if ((existing.data?.length ?? 0) > 0) {
+      return NextResponse.json({ success: true, message: "Already reported." });
+    }
   }
 
   await supabase.from("reports").insert({

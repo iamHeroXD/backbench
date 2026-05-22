@@ -54,6 +54,17 @@ export async function POST(
     return NextResponse.json({ error: "Cannot comment at this time." }, { status: 403 });
   }
 
+  // Rate limit: max 10 comments per 5 minutes
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { count: recentComments } = await supabase
+    .from("comments")
+    .select("*", { count: "exact", head: true })
+    .eq("author_id", user.id)
+    .gte("created_at", fiveMinAgo);
+  if ((recentComments ?? 0) >= 10) {
+    return NextResponse.json({ error: "Commenting too fast. Please slow down." }, { status: 429 });
+  }
+
   const body = await request.json();
   const parsed = commentSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid comment" }, { status: 400 });
@@ -78,6 +89,24 @@ export async function POST(
     .single();
 
   if (error) return NextResponse.json({ error: "Failed to post comment" }, { status: 500 });
+
+  // Detect @mentions in comment
+  const mentionRegex = /@([a-z0-9_]+)/gi;
+  const mentionedUsernames = [...content.matchAll(mentionRegex)].map((m) => m[1]);
+  if (mentionedUsernames.length > 0) {
+    const { data: mentionedProfiles } = await supabase
+      .from("profiles")
+      .select("id")
+      .in("username", mentionedUsernames.slice(0, 5));
+    if (mentionedProfiles) {
+      const mentionNotifs = mentionedProfiles
+        .filter((p) => p.id !== user.id)
+        .map((p) => ({ user_id: p.id, actor_id: user.id, type: "mention" as const, post_id: postId, comment_id: comment.id }));
+      if (mentionNotifs.length > 0) {
+        await supabase.from("notifications").insert(mentionNotifs);
+      }
+    }
+  }
 
   // Notify post author
   const { data: post } = await supabase

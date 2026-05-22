@@ -24,19 +24,22 @@ type ActivePerson = {
   class_name: string | null;
 };
 
+type TrendingTag = { tag: string; count: number };
+
 export default function ExplorePage() {
   const supabase = useMemo(() => createClient(), []);
   const [trendingPosts, setTrendingPosts] = useState<TrendingPost[]>([]);
   const [activePeople, setActivePeople] = useState<ActivePerson[]>([]);
+  const [trendingTags, setTrendingTags] = useState<TrendingTag[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadExplore = useCallback(async () => {
     const twoDaysAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
 
-    const [postsRes, reactionsRes, peopleRes] = await Promise.all([
+    const [postsRes, reactionsRes, peopleRes, tagsRes] = await Promise.all([
       supabase
         .from("posts")
-        .select("id, content, created_at, author_id")
+        .select("id, content, created_at, author_id, is_anonymous")
         .eq("is_deleted", false)
         .gte("created_at", twoDaysAgo)
         .order("created_at", { ascending: false })
@@ -49,9 +52,13 @@ export default function ExplorePage() {
         .eq("is_shadowbanned", false)
         .gte("last_active_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
         .limit(12),
+      supabase
+        .from("post_tags")
+        .select("tag")
+        .limit(200),
     ]);
 
-    type PostRow = { id: string; content: string | null; created_at: string; author_id: string };
+    type PostRow = { id: string; content: string | null; created_at: string; author_id: string; is_anonymous: boolean };
     type ReactionRow = { post_id: string | null };
     type ProfileRow = { id: string; display_name: string };
 
@@ -79,16 +86,27 @@ export default function ExplorePage() {
     const trending = posts
       .map((p) => ({
         id: p.id,
-        content: (p.content ?? "").slice(0, 100),
-        author: authorMap[p.author_id] ?? "unknown",
+        content: p.is_anonymous ? "[anonymous post]" : (p.content ?? "").slice(0, 100),
+        author: p.is_anonymous ? "anonymous" : (authorMap[p.author_id] ?? "unknown"),
         reactions: reactionMap[p.id] ?? 0,
         created_at: p.created_at,
       }))
       .sort((a, b) => b.reactions - a.reactions)
       .slice(0, 5);
 
+    // Compute trending tags
+    const tagCounts: Record<string, number> = {};
+    for (const row of (tagsRes.data ?? [])) {
+      tagCounts[row.tag] = (tagCounts[row.tag] ?? 0) + 1;
+    }
+    const sortedTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([tag, count]) => ({ tag, count }));
+
     setTrendingPosts(trending);
     setActivePeople((peopleRes.data ?? []) as ActivePerson[]);
+    setTrendingTags(sortedTags);
     setLoading(false);
   }, [supabase]);
 
@@ -174,21 +192,64 @@ export default function ExplorePage() {
         </div>
       </section>
 
+      {trendingTags.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Hash size={15} className="text-[#4a7aa8]" />
+            <h2 className="text-[#f0f0f0] text-sm font-medium">trending tags</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {trendingTags.map(({ tag, count }) => (
+              <a
+                key={tag}
+                href={`/search?q=${encodeURIComponent("#" + tag)}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1a2f44] border border-[#2a4a68] rounded-full hover:bg-[#1a3f58] transition-colors"
+              >
+                <span className="text-[#4a7aa8] text-xs">#{tag}</span>
+                <span className="text-[#444] text-[10px]">{count}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
         <div className="flex items-center gap-2 mb-3">
           <Hash size={15} className="text-[#4a7aa8]" />
           <h2 className="text-[#f0f0f0] text-sm font-medium">community</h2>
         </div>
-        <a
-          href="/polls"
-          className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
-        >
-          <div>
-            <p className="text-[#d0d0d0] text-sm font-medium">community polls</p>
-            <p className="text-[#555] text-xs mt-0.5">vote on what happens next</p>
-          </div>
-          <span className="text-[#4a7aa8] text-lg">{"->"}</span>
-        </a>
+        <div className="space-y-2">
+          <a
+            href="/polls"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+          >
+            <div>
+              <p className="text-[#d0d0d0] text-sm font-medium">active polls</p>
+              <p className="text-[#555] text-xs mt-0.5">vote on what happens next</p>
+            </div>
+            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+          </a>
+          <a
+            href="/spotted"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+          >
+            <div>
+              <p className="text-[#d0d0d0] text-sm font-medium">spotted</p>
+              <p className="text-[#555] text-xs mt-0.5">anonymous compliments &amp; confessions</p>
+            </div>
+            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+          </a>
+          <a
+            href="/whispers"
+            className="bb-card px-4 py-4 flex items-center justify-between hover:border-[#333] transition-colors block"
+          >
+            <div>
+              <p className="text-[#d0d0d0] text-sm font-medium">whispers</p>
+              <p className="text-[#555] text-xs mt-0.5">send anonymous tips to admin</p>
+            </div>
+            <span className="text-[#4a7aa8] text-lg">{"->"}</span>
+          </a>
+        </div>
       </section>
     </div>
   );

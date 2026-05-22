@@ -7,6 +7,7 @@ import { Plus, X, Type, Image as ImageIcon, Loader } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarFallback } from "@/lib/utils";
+import { validateImageFile } from "@/lib/moderation";
 import StoryViewer from "./StoryViewer";
 import type { Story, Profile } from "@/lib/types/database";
 
@@ -316,6 +317,8 @@ export default function StoryBar({ currentUserId }: { currentUserId: string }) {
                       const f = e.target.files?.[0];
                       if (!f) return;
                       if (f.size > 10 * 1024 * 1024) { toast.error("Max 10MB for stories."); return; }
+                      const validation = validateImageFile(f);
+                      if (!validation.valid) { toast.error(validation.error); return; }
                       setImageFile(f);
                       setImagePreview(URL.createObjectURL(f));
                     }}

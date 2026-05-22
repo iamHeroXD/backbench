@@ -51,25 +51,19 @@ export const REACTION_LABELS: Record<string, string> = {
 };
 
 export const CLASS_OPTIONS = [
-  "12 Science A",
-  "12 Science B",
-  "11 Science A",
-  "11 Science B",
-  "12 Commerce A",
-  "12 Commerce B",
-  "11 Commerce A",
-  "11 Commerce B",
+  "Plus Two Science",
+  "Plus Two Commerce",
 ];
 
 export function generateInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const segments = [4, 4, 4];
   return segments
-    .map((len) =>
-      Array.from({ length: len }, () =>
-        chars[Math.floor(Math.random() * chars.length)]
-      ).join("")
-    )
+    .map((len) => {
+      const bytes = new Uint8Array(len);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+    })
     .join("-");
 }
 

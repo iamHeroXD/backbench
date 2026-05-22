@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Compass, Sun, Sparkles, User } from "lucide-react";
+import { Home, Compass, Sun, Bookmark, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
@@ -11,7 +11,7 @@ const navItems = [
   { href: "/feed", icon: Home, label: "feed" },
   { href: "/explore", icon: Compass, label: "explore" },
   { href: "/tomorrow", icon: Sun, label: "tomorrow" },
-  { href: "/spotted", icon: Sparkles, label: "spotted" },
+  { href: "/bookmarks", icon: Bookmark, label: "saved" },
 ];
 
 export default function BottomNav() {
